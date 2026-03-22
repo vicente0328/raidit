@@ -20,7 +20,7 @@ interface Ember {
 const T = 48;
 // Canvas internal resolution (portrait — fits mobile perfectly)
 const GAME_W = TOWER_COLS * T; // 480
-const GAME_H = 720;
+const GAME_H = 540; // zoomed in view
 // World height for one floor
 const WORLD_H = TOWER_ROWS * T; // 1200
 
@@ -71,6 +71,16 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     let transitionTimer = 0;
     let embers: Ember[] = [];
     let slashTrails: { x: number; y: number; angle: number; life: number; size: number }[] = [];
+
+    // Juice systems
+    let coyoteTimer = 0;        // frames since leaving ground (coyote time)
+    let jumpBufferTimer = 0;    // frames since jump was pressed in air
+    let hitStopTimer = 0;       // freeze frames on hit
+    let screenShakeTimer = 0;   // screen shake duration
+    let screenShakeIntensity = 0;
+    let damageFlashTimer = 0;   // red vignette on damage
+    const COYOTE_FRAMES = 8;    // ~0.13s at 60fps
+    const JUMP_BUFFER_FRAMES = 8;
 
     // Player — collision box fits in 1 tile (both w and h), sprite renders bigger
     const PLAYER_DRAW_W = 56;
@@ -132,6 +142,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
 
     const keys = keysRef.current;
 
+    let prevArrowUp = false;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'ArrowLeft') keys.ArrowLeft = true;
       if (e.code === 'ArrowRight') keys.ArrowRight = true;
@@ -179,18 +190,48 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     const worldH = level.rooms[0].grid.length * T;
 
     const update = () => {
+      // Hit-stop: freeze game for impact feel
+      if (hitStopTimer > 0) {
+        hitStopTimer--;
+        // Still render, just don't update game state
+        animationFrameId = requestAnimationFrame(update);
+        return;
+      }
+
       frameCount++;
 
       // === PHYSICS ===
-      player.vy += 0.7;
+      player.vy += 1.0;
+
+      // Variable jump: cut jump short when key released
+      if (!keys.ArrowUp && player.vy < -4) {
+        player.vy = -4; // cap upward velocity for short hops
+      }
 
       if (keys.ArrowLeft) { player.vx = -5; player.facingRight = false; }
       else if (keys.ArrowRight) { player.vx = 5; player.facingRight = true; }
       else { player.vx = 0; }
 
-      if (keys.ArrowUp && player.isGrounded) {
-        player.vy = -14; // Stronger jump for vertical gameplay
+      // Coyote time tracking
+      if (player.isGrounded) {
+        coyoteTimer = COYOTE_FRAMES;
+      } else {
+        if (coyoteTimer > 0) coyoteTimer--;
+      }
+
+      // Jump buffer: set on fresh press, decay over time
+      if (keys.ArrowUp && !prevArrowUp) jumpBufferTimer = JUMP_BUFFER_FRAMES;
+      if (jumpBufferTimer > 0) jumpBufferTimer--;
+      prevArrowUp = keys.ArrowUp;
+
+      // Jump: works with coyote time OR jump buffer
+      const canJump = player.isGrounded || coyoteTimer > 0;
+      const wantsJump = keys.ArrowUp && jumpBufferTimer > 0;
+      if ((keys.ArrowUp && canJump) || (wantsJump && player.isGrounded)) {
+        player.vy = -13;
         player.isGrounded = false;
+        coyoteTimer = 0;
+        jumpBufferTimer = 0;
       }
 
       // Horizontal movement + collision
@@ -253,21 +294,34 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           player.facingRight
         );
 
+        let didHitEnemy = false;
         for (const e of enemies) {
           if (checkCol(hitBox, e)) {
+            const knockDir = player.facingRight ? 1 : -1;
             if (e.type === BlockType.BOSS) {
               if (e.weak) {
                 e.hp -= 1;
                 e.hitFlash = 8;
+                e.x += knockDir * 8;
+                e.vy = -3;
                 for (let i = 0; i < 8; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
+                didHitEnemy = true;
               }
             } else {
               e.hp -= 1;
               e.hitFlash = 8;
-              e.x += player.facingRight ? 12 : -12;
+              e.x += knockDir * 20;
+              e.vy = -4;
               for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
+              didHitEnemy = true;
             }
           }
+        }
+        // Hit-stop + screen shake on successful hit
+        if (didHitEnemy) {
+          hitStopTimer = 3; // ~0.05s freeze
+          screenShakeTimer = 6;
+          screenShakeIntensity = 4;
         }
       }
       if (player.attackTimer > 0) player.attackTimer--;
@@ -282,8 +336,8 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         }
         if (e.hitFlash > 0) e.hitFlash--;
 
-        // Gravity for ground-based enemies (not stationary mage — it floats)
-        if (e.type !== BlockType.MOB_STATIONARY) {
+        // Gravity for enemies (stationary mage only when knocked back)
+        if (e.type !== BlockType.MOB_STATIONARY || e.vy !== 0) {
           e.vy += 0.5;
           e.y += e.vy;
           for (const w of walls) {
@@ -314,6 +368,11 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         }
         if (e.type === BlockType.BOSS) {
           e.timer++;
+          // Telegraph: boss pulses/shakes before state change (last 30 frames)
+          if (e.timer > 90 && e.timer <= 120) {
+            const intensity = (e.timer - 90) / 30; // 0→1
+            e.x += Math.sin(e.timer * 1.5) * intensity * 3;
+          }
           if (e.timer > 120) { e.weak = !e.weak; e.timer = 0; }
         }
       }
@@ -328,6 +387,9 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           player.invulnTimer = 60;
           player.vy = -8;
           player.vx = player.facingRight ? -5 : 5;
+          damageFlashTimer = 20;
+          screenShakeTimer = 8;
+          screenShakeIntensity = 6;
           for (let i = 0; i < 8; i++) spawnEmber(player.x + player.w / 2, player.y + player.h / 2, '#cc2200');
         }
       }
@@ -354,12 +416,23 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       cameraY += (targetCamY - cameraY) * 0.1;
       cameraY = Math.max(0, Math.min(worldH - GAME_H, cameraY));
 
+      // Decay timers
+      if (screenShakeTimer > 0) screenShakeTimer--;
+      if (damageFlashTimer > 0) damageFlashTimer--;
+
       // === RENDER ===
       ctx.save();
       ctx.fillStyle = '#0d0a07';
       ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-      ctx.translate(0, -cameraY);
+      // Screen shake offset
+      let shakeX = 0, shakeY = 0;
+      if (screenShakeTimer > 0) {
+        shakeX = (Math.random() - 0.5) * screenShakeIntensity * 2;
+        shakeY = (Math.random() - 0.5) * screenShakeIntensity * 2;
+      }
+
+      ctx.translate(shakeX, -cameraY + shakeY);
 
       // Floor tiles (only visible rows for performance)
       const grid = level.rooms[currentRoomIdx].grid;
@@ -438,6 +511,16 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.drawImage(ANIM.stationary.cast[cf], e.x, e.y + floatY, e.w, e.h);
         }
         if (e.type === BlockType.BOSS) {
+          // Telegraph glow before state change
+          if (e.timer > 90) {
+            const pulse = (e.timer - 90) / 30;
+            const telegraphColor = e.weak ? 'rgba(139,0,0,' : 'rgba(252,165,165,';
+            const tg = ctx.createRadialGradient(e.x + e.w/2, e.y + e.h/2, 10, e.x + e.w/2, e.y + e.h/2, 80);
+            tg.addColorStop(0, telegraphColor + (pulse * 0.4) + ')');
+            tg.addColorStop(1, telegraphColor + '0)');
+            ctx.fillStyle = tg;
+            ctx.fillRect(e.x - 40, e.y - 40, e.w + 80, e.h + 80);
+          }
           ctx.shadowBlur = 25;
           ctx.shadowColor = e.weak ? '#fca5a5' : '#8b0000';
           if (e.weak) ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.3) hue-rotate(60deg)';
@@ -580,6 +663,17 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, GAME_W, GAME_H);
 
+      // Damage flash — red vignette on hit
+      if (damageFlashTimer > 0) {
+        const flashAlpha = (damageFlashTimer / 20) * 0.6;
+        const dmgVig = ctx.createRadialGradient(GAME_W / 2, GAME_H / 2, 100, GAME_W / 2, GAME_H / 2, 400);
+        dmgVig.addColorStop(0, 'rgba(204, 34, 0, 0)');
+        dmgVig.addColorStop(0.6, `rgba(204, 34, 0, ${flashAlpha * 0.3})`);
+        dmgVig.addColorStop(1, `rgba(204, 34, 0, ${flashAlpha})`);
+        ctx.fillStyle = dmgVig;
+        ctx.fillRect(0, 0, GAME_W, GAME_H);
+      }
+
       // Floor indicator
       ctx.fillStyle = '#d4a017';
       ctx.font = 'bold 18px "Cinzel", serif';
@@ -694,32 +788,32 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end px-3 z-50 pointer-events-none select-none"
           style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
         >
-          <div className="flex gap-1.5 items-end pointer-events-auto">
+          <div className="flex gap-2 items-end pointer-events-auto">
             <button
-              className="w-[56px] h-[56px] rounded-2xl btn-medieval text-[#d4a017] text-xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
+              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = false; }}
               onTouchCancel={() => { keysRef.current.ArrowLeft = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >←</button>
             <button
-              className="w-[56px] h-[56px] rounded-2xl btn-medieval text-[#d4a017] text-xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
+              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowRight = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowRight = false; }}
               onTouchCancel={() => { keysRef.current.ArrowRight = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >→</button>
           </div>
-          <div className="flex gap-1.5 items-end pointer-events-auto">
+          <div className="flex gap-2 items-end pointer-events-auto">
             <button
-              className="w-[56px] h-[56px] rounded-2xl btn-medieval text-[#38bdf8] text-[10px] font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
+              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#38bdf8] text-xs font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowUp = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowUp = false; }}
               onTouchCancel={() => { keysRef.current.ArrowUp = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >JUMP</button>
             <button
-              className="w-[56px] h-[56px] rounded-2xl btn-medieval text-[#cc2200] text-[10px] font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
+              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#cc2200] text-xs font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.Space = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.Space = false; }}
               onTouchCancel={() => { keysRef.current.Space = false; }}
