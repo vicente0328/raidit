@@ -1156,29 +1156,44 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
 
       {isMobile && (
         <>
-          {/* Left D-pad: fixed to bottom-left corner */}
-          <div className="fixed z-50 pointer-events-auto select-none flex gap-0 items-end"
-            style={{ left: '12px', bottom: 'max(20px, calc(env(safe-area-inset-bottom) + 12px))' }}
+          {/* Left D-pad: single touch zone with slide support */}
+          <div
+            className="fixed z-50 select-none flex gap-0 items-end"
+            style={{ left: '4px', bottom: 'max(8px, calc(env(safe-area-inset-bottom) + 4px))' }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              const touch = e.touches[0];
+              const rect = e.currentTarget.getBoundingClientRect();
+              const mid = rect.left + rect.width / 2;
+              keysRef.current.ArrowLeft = touch.clientX < mid;
+              keysRef.current.ArrowRight = touch.clientX >= mid;
+            }}
+            onTouchMove={(e) => {
+              e.preventDefault();
+              const touch = e.touches[0];
+              const rect = e.currentTarget.getBoundingClientRect();
+              const mid = rect.left + rect.width / 2;
+              keysRef.current.ArrowLeft = touch.clientX < mid;
+              keysRef.current.ArrowRight = touch.clientX >= mid;
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              keysRef.current.ArrowLeft = false;
+              keysRef.current.ArrowRight = false;
+            }}
+            onTouchCancel={() => {
+              keysRef.current.ArrowLeft = false;
+              keysRef.current.ArrowRight = false;
+            }}
+            onContextMenu={(e) => e.preventDefault()}
           >
-            <button
-              className="w-[80px] h-[80px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
-              onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = true; }}
-              onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = false; }}
-              onTouchCancel={() => { keysRef.current.ArrowLeft = false; }}
-              onContextMenu={(e) => e.preventDefault()}
-            >←</button>
-            <button
-              className="w-[80px] h-[80px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
-              onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowRight = true; }}
-              onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowRight = false; }}
-              onTouchCancel={() => { keysRef.current.ArrowRight = false; }}
-              onContextMenu={(e) => e.preventDefault()}
-            >→</button>
+            <div className="w-[80px] h-[80px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold flex items-center justify-center opacity-70 pointer-events-none">←</div>
+            <div className="w-[80px] h-[80px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold flex items-center justify-center opacity-70 pointer-events-none">→</div>
           </div>
 
-          {/* Right action buttons: fixed to bottom-right corner, JUMP bigger */}
-          <div className="fixed z-50 pointer-events-auto select-none flex gap-1 items-end"
-            style={{ right: '12px', bottom: 'max(20px, calc(env(safe-area-inset-bottom) + 12px))' }}
+          {/* Right action buttons: fixed to bottom-right corner */}
+          <div className="fixed z-50 select-none flex gap-1 items-end"
+            style={{ right: '4px', bottom: 'max(8px, calc(env(safe-area-inset-bottom) + 4px))' }}
           >
             <button
               className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#cc2200] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
@@ -1188,7 +1203,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
               onContextMenu={(e) => e.preventDefault()}
             >ATK</button>
             <button
-              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#38bdf8] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
+              className="w-[92px] h-[92px] rounded-2xl btn-medieval text-[#38bdf8] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowUp = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowUp = false; }}
               onTouchCancel={() => { keysRef.current.ArrowUp = false; }}
