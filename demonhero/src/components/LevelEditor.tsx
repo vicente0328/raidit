@@ -212,8 +212,10 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
       <div className="relative w-full h-[100dvh] bg-[#09090b] overflow-hidden flex flex-col items-center justify-center">
         <GameCanvas
           level={{ id: 'test', name: '테스트 플레이', creator: '마왕 (테스트)', creatorId: 'test', infamy: 0, clears: 0, attempts: 0, rooms }}
+          stats={{ fame: 0, infamy: 0, inventory: [], equipment: { weapon: null, armor: null, boots: null } }}
           onWin={() => { setHasClearedTest(true); setIsTesting(false); setMessage({ text: '테스트 클리어! 이제 저장할 수 있습니다.', type: 'success' }); }}
           onLose={() => { setIsTesting(false); setMessage({ text: '테스트 실패... 난이도를 조절해보세요.', type: 'error' }); }}
+          onSaveInventory={async () => {}}
         />
         <button
           onClick={() => setIsTesting(false)}
