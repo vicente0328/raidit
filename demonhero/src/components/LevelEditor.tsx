@@ -91,22 +91,12 @@ export function LevelEditor({ onSave, onCancel }: Props) {
     setMessage(null);
   }, [currentRoom, selectedBlock]);
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const grid = gridContainerRef.current;
-    if (!grid) return;
-    const rect = grid.getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top + grid.scrollTop;
-    const c = Math.floor(x / cellSize);
-    const r = Math.floor(y / cellSize);
-    if (r >= 0 && r < TOWER_ROWS && c >= 0 && c < TOWER_COLS) {
-      handleCellAction(r, c);
-    }
-  }, [cellSize, handleCellAction]);
+  const drawModeRef = useRef(drawMode);
+  useEffect(() => { drawModeRef.current = drawMode; }, [drawMode]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!drawModeRef.current) return;
+    e.preventDefault();
     const touch = e.touches[0];
     const grid = gridContainerRef.current;
     if (!grid) return;
@@ -211,7 +201,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
               gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)`,
               touchAction: drawMode ? 'none' : 'pan-y',
             }}
-            {...(drawMode ? { onTouchStart: handleTouchStart, onTouchMove: handleTouchMove } : {})}
+            onTouchStart={handleTouchStart}
           >
             {rooms[currentRoom].grid.map((row, r) =>
               row.map((cell, c) => (
