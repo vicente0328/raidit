@@ -34,7 +34,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'displayName', 'photoURL', 'email', 'fame', 'infamy', 'createdAt']) &&
+      return hasOnlyAllowedFields(['uid', 'displayName', 'photoURL', 'email', 'fame', 'infamy', 'inventory', 'equipment', 'createdAt']) &&
              isValidStringLength(data.uid, 1, 100) &&
              isValidStringLength(data.displayName, 1, 50) &&
              data.photoURL is string &&

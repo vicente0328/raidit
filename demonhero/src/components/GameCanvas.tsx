@@ -149,7 +149,16 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       embers = [];
       const grid = level.rooms[idx].grid;
       const rows = grid.length;
-      const cols = grid[0].length;
+      const cols = grid[0]?.length ?? 0;
+      // Debug: count non-empty cells
+      const counts: Record<number, number> = {};
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const v = grid[r][c];
+          if (v !== 0) counts[v] = (counts[v] || 0) + 1;
+        }
+      }
+      console.log(`[loadRoom ${idx}] grid ${rows}x${cols}, blocks:`, counts);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const val = grid[r][c];
@@ -183,6 +192,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     };
 
     loadRoom(0);
+    console.log(`[GameCanvas init] walls:${walls.length} platforms:${platforms.length} spikes:${spikes.length} potions:${potions.length} enemies:${enemies.length} door:${!!door}`);
 
     const keys = keysRef.current;
 
