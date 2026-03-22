@@ -18,9 +18,9 @@ interface Ember {
 
 // Tile size in world coordinates
 const T = 48;
-// Canvas internal resolution (portrait — fits mobile perfectly)
-const GAME_W = TOWER_COLS * T; // 480
-const GAME_H = 540; // zoomed in view
+// Canvas internal resolution — zoomed in (7 tiles wide view)
+const GAME_W = 7 * T; // 336
+const GAME_H = 10 * T; // 480 (portrait)
 // World height for one floor
 const WORLD_H = TOWER_ROWS * T; // 1200
 
@@ -39,7 +39,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     const mobile = window.innerWidth < 768;
     const maxW = mobile ? window.innerWidth - 8 : Math.min(window.innerWidth - 48, 480);
     const maxH = mobile
-      ? window.innerHeight - 140
+      ? window.innerHeight - 180
       : window.innerHeight - 160;
     const aspect = GAME_W / GAME_H;
     let w = maxW;
@@ -66,7 +66,9 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     let animationFrameId: number;
     let currentRoomIdx = 0;
     let frameCount = 0;
+    let cameraX = 0; // horizontal camera offset (world coords)
     let cameraY = 0; // vertical camera offset (world coords)
+    const WORLD_W = TOWER_COLS * T; // full world width
 
     let transitionTimer = 0;
     let embers: Ember[] = [];
@@ -82,12 +84,12 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     const COYOTE_FRAMES = 8;    // ~0.13s at 60fps
     const JUMP_BUFFER_FRAMES = 8;
 
-    // Player — collision box fits in 1 tile (both w and h), sprite renders bigger
-    const PLAYER_DRAW_W = 56;
-    const PLAYER_DRAW_H = 68;
+    // Player — collision box is 2 tiles, sprite renders slightly bigger
+    const PLAYER_DRAW_W = 2 * T + 16;
+    const PLAYER_DRAW_H = 2 * T + 24;
     let player = {
-      x: 2 * T, y: (TOWER_ROWS - 3) * T - (T - 4),
-      w: T - 4, h: T - 4, // collision fits in 1 tile gap in any direction (44x44 < 48x48)
+      x: 3 * T, y: (TOWER_ROWS - 3) * T - (2 * T - 4),
+      w: 2 * T - 4, h: 2 * T - 4, // collision fits in 2 tile space (92x92)
       vx: 0, vy: 0,
       hp: 5,
       isGrounded: false,
@@ -97,14 +99,18 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     };
 
     let walls: { x: number; y: number; w: number; h: number }[] = [];
+    let platforms: { x: number; y: number; w: number; h: number }[] = []; // one-way platforms
     let spikes: { x: number; y: number; w: number; h: number }[] = [];
     let enemies: any[] = [];
+    let projectiles: { x: number; y: number; vx: number; vy: number; w: number; h: number; life: number }[] = [];
     let door: { x: number; y: number; w: number; h: number } | null = null;
 
     const loadRoom = (idx: number) => {
       walls = [];
+      platforms = [];
       spikes = [];
       enemies = [];
+      projectiles = [];
       door = null;
       embers = [];
       const grid = level.rooms[idx].grid;
@@ -116,18 +122,21 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           const x = c * T;
           const y = r * T;
           if (val === BlockType.WALL) walls.push({ x, y, w: T, h: T });
-          if (val === BlockType.SPIKE) spikes.push({ x, y: y + 12, w: T, h: T - 12 });
+          if (val === BlockType.PLATFORM) platforms.push({ x, y: y + Math.floor(T * 0.7), w: T, h: Math.floor(T * 0.3) });
+          if (val === BlockType.SPIKE) spikes.push({ x, y: y + T * 0.25, w: T, h: T * 0.75 });
           if (val === BlockType.MOB_PATROL) enemies.push({
-            x, y: y - 8, w: 56, h: 56,
+            x, y: y - T, w: 2 * T, h: 2 * T,
             type: val, hp: 2, maxHp: 2, vx: 2, vy: 0, startX: x, hitFlash: 0
           });
           if (val === BlockType.MOB_STATIONARY) enemies.push({
-            x, y: y - 8, w: 56, h: 56,
-            type: val, hp: 3, maxHp: 3, vx: 0, vy: 0, hitFlash: 0
+            x, y: y - T, w: 2 * T, h: 2 * T,
+            type: val, hp: 3, maxHp: 3, vx: 0, vy: 0, hitFlash: 0,
+            shootTimer: 0, telegraphing: false
           });
           if (val === BlockType.BOSS) enemies.push({
-            x: x - 32, y: y - 64, w: 112, h: 112,
-            type: val, hp: 10, maxHp: 10, vx: 0, vy: 0, timer: 0, weak: false, hitFlash: 0
+            x: x - T, y: y - 2 * T, w: 3 * T, h: 3 * T,
+            type: val, hp: 10, maxHp: 10, vx: 0, vy: 0, timer: 0, weak: false, hitFlash: 0,
+            homeX: x - T, homeY: y - 2 * T
           });
           if (val === BlockType.DOOR) door = { x, y, w: T, h: T };
           if (val === BlockType.SPAWN) {
@@ -228,7 +237,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       const canJump = player.isGrounded || coyoteTimer > 0;
       const wantsJump = keys.ArrowUp && jumpBufferTimer > 0;
       if ((keys.ArrowUp && canJump) || (wantsJump && player.isGrounded)) {
-        player.vy = -13;
+        player.vy = -15;
         player.isGrounded = false;
         coyoteTimer = 0;
         jumpBufferTimer = 0;
@@ -245,6 +254,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       }
 
       // Vertical movement + collision
+      const prevPlayerY = player.y;
       player.y += player.vy;
       player.isGrounded = false;
       for (const w of walls) {
@@ -256,6 +266,17 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
             player.y = w.y + w.h;
           }
           player.vy = 0;
+        }
+      }
+      // One-way platform collision (only from above, only when falling)
+      for (const p of platforms) {
+        if (player.vy >= 0 && checkCol(player, p)) {
+          const prevBottom = prevPlayerY + player.h;
+          if (prevBottom <= p.y + 4) { // was above platform
+            player.y = p.y - player.h;
+            player.vy = 0;
+            player.isGrounded = true;
+          }
         }
       }
 
@@ -282,9 +303,9 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       if (keys.Space && player.attackTimer <= 0) {
         player.attackTimer = 20;
         const hitBox = {
-          x: player.facingRight ? player.x + player.w : player.x - 40,
+          x: player.facingRight ? player.x + player.w : player.x - 60,
           y: player.y,
-          w: 40,
+          w: 60,
           h: player.h
         };
 
@@ -339,6 +360,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         // Gravity for enemies (stationary mage only when knocked back)
         if (e.type !== BlockType.MOB_STATIONARY || e.vy !== 0) {
           e.vy += 0.5;
+          const prevEY = e.y;
           e.y += e.vy;
           for (const w of walls) {
             if (checkCol(e, w)) {
@@ -351,13 +373,20 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
               }
             }
           }
+          // Enemies also land on platforms
+          if (e.vy >= 0) {
+            for (const p of platforms) {
+              if (checkCol(e, p) && prevEY + e.h <= p.y + 4) {
+                e.y = p.y - e.h;
+                e.vy = 0;
+              }
+            }
+          }
         }
 
         if (e.type === BlockType.MOB_PATROL) {
           e.x += e.vx;
-          // Reverse at patrol range OR if about to walk off a platform edge
-          if (Math.abs(e.x - e.startX) > 80) e.vx *= -1;
-          // Wall collision for horizontal movement
+          // Wall collision
           for (const w of walls) {
             if (checkCol(e, w)) {
               if (e.vx > 0) e.x = w.x - e.w;
@@ -365,15 +394,107 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
               e.vx *= -1;
             }
           }
+          // Edge detection: check if ground exists ahead (walls + platforms)
+          const checkX = e.vx > 0 ? e.x + e.w + 2 : e.x - 2;
+          const checkY = e.y + e.h + 4;
+          let hasFloor = false;
+          for (const w of walls) {
+            if (checkX >= w.x && checkX <= w.x + w.w && checkY >= w.y && checkY <= w.y + w.h) {
+              hasFloor = true;
+              break;
+            }
+          }
+          if (!hasFloor) {
+            for (const p of platforms) {
+              if (checkX >= p.x && checkX <= p.x + p.w && checkY >= p.y && checkY <= p.y + p.h) {
+                hasFloor = true;
+                break;
+              }
+            }
+          }
+          if (!hasFloor && e.vy === 0) {
+            e.vx *= -1; // turn at edge
+          }
         }
+
+        // Stationary mage: projectile firing
+        if (e.type === BlockType.MOB_STATIONARY) {
+          e.shootTimer++;
+          // Telegraph 30 frames before firing
+          if (e.shootTimer >= 90) {
+            e.telegraphing = true;
+          }
+          if (e.shootTimer >= 120) {
+            e.shootTimer = 0;
+            e.telegraphing = false;
+            // Fire toward player
+            const dx = player.x - e.x;
+            const dy = player.y - e.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const speed = 4;
+            projectiles.push({
+              x: e.x + e.w / 2 - 6,
+              y: e.y + e.h / 2 - 6,
+              vx: (dx / dist) * speed,
+              vy: (dy / dist) * speed,
+              w: 12, h: 12,
+              life: 180
+            });
+            for (let i = 0; i < 4; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#9333ea');
+          }
+        }
+
         if (e.type === BlockType.BOSS) {
+          // Enrage: shorter cycles when HP <= 5
+          const cycleLen = e.hp <= 5 ? 80 : 120;
+          const telegraphStart = cycleLen - 30;
           e.timer++;
-          // Telegraph: boss pulses/shakes before state change (last 30 frames)
-          if (e.timer > 90 && e.timer <= 120) {
-            const intensity = (e.timer - 90) / 30; // 0→1
+
+          // Telegraph before state change
+          if (e.timer > telegraphStart && e.timer <= cycleLen) {
+            const intensity = (e.timer - telegraphStart) / 30;
             e.x += Math.sin(e.timer * 1.5) * intensity * 3;
           }
-          if (e.timer > 120) { e.weak = !e.weak; e.timer = 0; }
+          if (e.timer > cycleLen) { e.weak = !e.weak; e.timer = 0; }
+
+          // Invulnerable phase: charge toward player
+          if (!e.weak) {
+            const dx = player.x + player.w / 2 - (e.x + e.w / 2);
+            const chargeSpeed = e.hp <= 5 ? 3 : 2;
+            if (Math.abs(dx) > 20) {
+              e.x += dx > 0 ? chargeSpeed : -chargeSpeed;
+            }
+            // Wall collision during charge
+            for (const w of walls) {
+              if (checkCol(e, w)) {
+                if (dx > 0) e.x = w.x - e.w;
+                else e.x = w.x + w.w;
+              }
+            }
+          } else {
+            // Weak: drift back toward home position
+            const homeDx = e.homeX - e.x;
+            if (Math.abs(homeDx) > 2) e.x += homeDx > 0 ? 1 : -1;
+          }
+        }
+      }
+
+      // Projectile updates
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        // Remove if expired or hits a wall
+        let hitWall = false;
+        for (const w of walls) {
+          if (checkCol(p, w)) { hitWall = true; break; }
+        }
+        if (p.life <= 0 || hitWall) {
+          if (hitWall) {
+            for (let j = 0; j < 3; j++) spawnEmber(p.x + p.w / 2, p.y + p.h / 2, '#9333ea');
+          }
+          projectiles.splice(i, 1);
         }
       }
 
@@ -382,6 +503,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         let hit = false;
         for (const s of spikes) if (checkCol(player, s)) hit = true;
         for (const e of enemies) if (checkCol(player, e)) hit = true;
+        for (const p of projectiles) if (checkCol(player, p)) hit = true;
         if (hit) {
           player.hp -= 1;
           player.invulnTimer = 60;
@@ -411,6 +533,11 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       if (player.hp <= 0) { onLose(); return; }
 
       // === CAMERA ===
+      // Smooth horizontal follow
+      const targetCamX = player.x + player.w / 2 - GAME_W / 2;
+      cameraX += (targetCamX - cameraX) * 0.12;
+      cameraX = Math.max(0, Math.min(WORLD_W - GAME_W, cameraX));
+
       // Smooth vertical follow — player stays in upper-middle of screen
       const targetCamY = player.y - GAME_H * 0.4;
       cameraY += (targetCamY - cameraY) * 0.1;
@@ -432,7 +559,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         shakeY = (Math.random() - 0.5) * screenShakeIntensity * 2;
       }
 
-      ctx.translate(shakeX, -cameraY + shakeY);
+      ctx.translate(-cameraX + shakeX, -cameraY + shakeY);
 
       // Floor tiles (only visible rows for performance)
       const grid = level.rooms[currentRoomIdx].grid;
@@ -444,7 +571,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       for (let r = startRow; r < endRow; r++) {
         for (let c = 0; c < cols; c++) {
           const val = grid[r][c];
-          if (val === BlockType.EMPTY || val === BlockType.MOB_PATROL || val === BlockType.MOB_STATIONARY || val === BlockType.BOSS || val === BlockType.SPAWN) {
+          if (val === BlockType.EMPTY || val === BlockType.MOB_PATROL || val === BlockType.MOB_STATIONARY || val === BlockType.BOSS || val === BlockType.SPAWN || val === BlockType.PLATFORM) {
             ctx.globalAlpha = 0.15;
             ctx.drawImage(SPRITES.floor, c * T, r * T, T, T);
             ctx.globalAlpha = 1;
@@ -479,6 +606,13 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.drawImage(SPRITES.wall, w.x, w.y, w.w, w.h);
       }
 
+      // Platforms
+      for (const p of platforms) {
+        if (p.y + p.h < cameraY - 10 || p.y > cameraY + GAME_H + 10) continue;
+        // Draw the platform sprite at the full tile position (visual is full tile, collision is bottom only)
+        ctx.drawImage(SPRITES.platform, p.x, p.y - Math.floor(T * 0.7), T, T);
+      }
+
       // Spikes
       for (const s of spikes) {
         if (s.y + s.h < cameraY - 10 || s.y > cameraY + GAME_H + 10) continue;
@@ -507,13 +641,27 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.shadowBlur = 15;
           ctx.shadowColor = '#9333ea';
           const floatY = Math.sin(frameCount * 0.04) * 4;
+          // Telegraph glow before firing
+          if (e.telegraphing) {
+            const pulse = (e.shootTimer - 90) / 30;
+            ctx.shadowBlur = 25 + pulse * 20;
+            ctx.shadowColor = '#e879f9';
+            // Pulsing glow
+            const tg = ctx.createRadialGradient(e.x + e.w/2, e.y + e.h/2 + floatY, 5, e.x + e.w/2, e.y + e.h/2 + floatY, 50);
+            tg.addColorStop(0, `rgba(232, 121, 249, ${pulse * 0.5})`);
+            tg.addColorStop(1, 'rgba(232, 121, 249, 0)');
+            ctx.fillStyle = tg;
+            ctx.fillRect(e.x - 30, e.y - 30 + floatY, e.w + 60, e.h + 60);
+          }
           const cf = Math.floor(frameCount / 20) % 2;
           ctx.drawImage(ANIM.stationary.cast[cf], e.x, e.y + floatY, e.w, e.h);
         }
         if (e.type === BlockType.BOSS) {
           // Telegraph glow before state change
-          if (e.timer > 90) {
-            const pulse = (e.timer - 90) / 30;
+          const bossCycle = e.hp <= 5 ? 80 : 120;
+          const bossTelegraphStart = bossCycle - 30;
+          if (e.timer > bossTelegraphStart) {
+            const pulse = (e.timer - bossTelegraphStart) / 30;
             const telegraphColor = e.weak ? 'rgba(139,0,0,' : 'rgba(252,165,165,';
             const tg = ctx.createRadialGradient(e.x + e.w/2, e.y + e.h/2, 10, e.x + e.w/2, e.y + e.h/2, 80);
             tg.addColorStop(0, telegraphColor + (pulse * 0.4) + ')');
@@ -523,8 +671,17 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           }
           ctx.shadowBlur = 25;
           ctx.shadowColor = e.weak ? '#fca5a5' : '#8b0000';
-          if (e.weak) ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.3) hue-rotate(60deg)';
-          const bf = Math.floor(frameCount / 30) % 2;
+          if (e.hitFlash > 0) {
+            ctx.filter = 'brightness(3) saturate(0)';
+          } else if (e.weak) {
+            ctx.filter = 'brightness(1.3) hue-rotate(60deg)';
+          } else {
+            // Invuln + charging: angry red glow
+            ctx.filter = 'brightness(1.1) saturate(1.5)';
+            ctx.shadowBlur = 35;
+            ctx.shadowColor = '#ff0000';
+          }
+          const bf = Math.floor(frameCount / (e.weak ? 30 : 15)) % 2; // faster animation when charging
           ctx.drawImage(ANIM.boss.idle[bf], e.x, e.y, e.w, e.h);
         }
         ctx.restore();
@@ -554,6 +711,23 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.shadowBlur = 0;
           ctx.textAlign = 'start';
         }
+      }
+
+      // Projectiles
+      for (const p of projectiles) {
+        ctx.save();
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#9333ea';
+        ctx.fillStyle = '#c084fc';
+        ctx.beginPath();
+        ctx.arc(p.x + p.w / 2, p.y + p.h / 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // Inner glow
+        ctx.fillStyle = '#e879f9';
+        ctx.beginPath();
+        ctx.arc(p.x + p.w / 2, p.y + p.h / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       }
 
       // Door
@@ -785,35 +959,35 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       )}
 
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end px-3 z-50 pointer-events-none select-none"
-          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+        <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end px-4 z-50 pointer-events-none select-none"
+          style={{ paddingBottom: 'max(28px, calc(env(safe-area-inset-bottom) + 16px))' }}
         >
-          <div className="flex gap-2 items-end pointer-events-auto">
+          <div className="flex gap-3 items-end pointer-events-auto">
             <button
-              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
+              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = false; }}
               onTouchCancel={() => { keysRef.current.ArrowLeft = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >←</button>
             <button
-              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
+              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowRight = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowRight = false; }}
               onTouchCancel={() => { keysRef.current.ArrowRight = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >→</button>
           </div>
-          <div className="flex gap-2 items-end pointer-events-auto">
+          <div className="flex gap-3 items-end pointer-events-auto">
             <button
-              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#38bdf8] text-xs font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
+              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#38bdf8] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowUp = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowUp = false; }}
               onTouchCancel={() => { keysRef.current.ArrowUp = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >JUMP</button>
             <button
-              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#cc2200] text-xs font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
+              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#cc2200] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.Space = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.Space = false; }}
               onTouchCancel={() => { keysRef.current.Space = false; }}

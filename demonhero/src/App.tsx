@@ -26,16 +26,16 @@ const DEFAULT_LEVEL: LevelData = {
 };
 
 // Floor 1: tutorial floor with a patrol enemy
-DEFAULT_LEVEL.rooms[0].grid[19][4] = 3; // Patrol on lower platform
-DEFAULT_LEVEL.rooms[0].grid[15][6] = 2; // Spike on mid platform
+DEFAULT_LEVEL.rooms[0].grid[33][5] = 3; // Patrol on lower platform
+DEFAULT_LEVEL.rooms[0].grid[27][10] = 2; // Spike on mid platform
 
 // Floor 2: harder with stationary mage
-DEFAULT_LEVEL.rooms[1].grid[19][3] = 3; // Patrol
-DEFAULT_LEVEL.rooms[1].grid[11][3] = 4; // Stationary mage
-DEFAULT_LEVEL.rooms[1].grid[7][6] = 2;  // Spike near top
+DEFAULT_LEVEL.rooms[1].grid[33][4] = 3; // Patrol
+DEFAULT_LEVEL.rooms[1].grid[21][4] = 4; // Stationary mage
+DEFAULT_LEVEL.rooms[1].grid[15][10] = 2;  // Spike near top
 
 // Floor 3: boss floor
-DEFAULT_LEVEL.rooms[2].grid[11][3] = 5;  // Boss on middle platform
+DEFAULT_LEVEL.rooms[2].grid[21][5] = 5;  // Boss on middle platform
 
 type Screen = 'home' | 'hero_dash' | 'demon_dash' | 'play' | 'edit' | 'result';
 

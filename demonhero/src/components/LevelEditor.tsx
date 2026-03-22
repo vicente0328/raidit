@@ -15,11 +15,13 @@ const BLOCK_IMAGES: Record<number, string> = {
   [BlockType.BOSS]: SPRITE_URLS.boss,
   [BlockType.DOOR]: SPRITE_URLS.door,
   [BlockType.SPAWN]: SPRITE_URLS.spawn,
+  [BlockType.PLATFORM]: SPRITE_URLS.platform,
 };
 
 const BLOCK_NAMES: Record<number, string> = {
   [BlockType.EMPTY]: '지우개',
   [BlockType.WALL]: '석벽',
+  [BlockType.PLATFORM]: '발판',
   [BlockType.SPIKE]: '함정',
   [BlockType.MOB_PATROL]: '해골',
   [BlockType.MOB_STATIONARY]: '마법사',
@@ -31,6 +33,7 @@ const BLOCK_NAMES: Record<number, string> = {
 const BLOCK_NAMES_FULL: Record<number, string> = {
   [BlockType.EMPTY]: '지우개',
   [BlockType.WALL]: '석벽',
+  [BlockType.PLATFORM]: '발판 (위에서만 착지)',
   [BlockType.SPIKE]: '철가시 함정',
   [BlockType.MOB_PATROL]: '해골 전사',
   [BlockType.MOB_STATIONARY]: '어둠 마법사',
