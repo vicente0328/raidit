@@ -71,12 +71,12 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     let embers: Ember[] = [];
     let slashTrails: { x: number; y: number; angle: number; life: number; size: number }[] = [];
 
-    // Player — collision box fits in 1 tile, sprite renders bigger
+    // Player — collision box fits in 1 tile (both w and h), sprite renders bigger
     const PLAYER_DRAW_W = 56;
     const PLAYER_DRAW_H = 68;
     let player = {
-      x: 2 * T, y: (TOWER_ROWS - 3) * T - 68,
-      w: T - 4, h: 68, // collision width fits in 1 tile gap (44px < 48px)
+      x: 2 * T, y: (TOWER_ROWS - 3) * T - (T - 4),
+      w: T - 4, h: T - 4, // collision fits in 1 tile gap in any direction (44x44 < 48x48)
       vx: 0, vy: 0,
       hp: 5,
       isGrounded: false,
