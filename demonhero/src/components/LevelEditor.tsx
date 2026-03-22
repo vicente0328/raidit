@@ -40,7 +40,7 @@ const BLOCK_NAMES_FULL: Record<number, string> = {
 };
 
 interface Props {
-  onSave: (rooms: RoomData[]) => void;
+  onSave: (rooms: RoomData[]) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -79,14 +79,16 @@ export function LevelEditor({ onSave, onCancel }: Props) {
 
   const handleCellAction = useCallback((r: number, c: number) => {
     setRooms(prev => {
+      const oldVal = prev[currentRoom].grid[r][c];
+      if (oldVal === selectedBlock) return prev; // no change
       const newRooms = [...prev];
       const newGrid = newRooms[currentRoom].grid.map(row => [...row]);
       newGrid[r][c] = selectedBlock;
       newRooms[currentRoom] = { ...newRooms[currentRoom], grid: newGrid };
+      setHasClearedTest(false);
+      setMessage(null);
       return newRooms;
     });
-    setHasClearedTest(false);
-    setMessage(null);
   }, [currentRoom, selectedBlock]);
 
   // 1 finger = draw, 2 fingers = scroll (browser handles pan-y)
@@ -123,9 +125,18 @@ export function LevelEditor({ onSave, onCancel }: Props) {
     return true;
   };
 
-  const handleSave = () => {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
     if (!hasClearedTest) { setMessage({ text: '테스트 플레이를 클리어해야 저장할 수 있습니다.', type: 'error' }); return; }
-    if (validateLevel()) onSave(rooms);
+    if (!validateLevel()) return;
+    setSaving(true);
+    try {
+      await onSave(rooms);
+    } catch (err) {
+      setMessage({ text: 'Save failed. Please try again.', type: 'error' });
+      setSaving(false);
+    }
   };
 
   const handleTestPlay = () => {
@@ -172,9 +183,9 @@ export function LevelEditor({ onSave, onCancel }: Props) {
             <button onClick={handleTestPlay} className="btn-surface text-[#22d3ee] px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1">
               <Play className="w-3.5 h-3.5" /> Test
             </button>
-            <button onClick={handleSave} disabled={!hasClearedTest}
-              className={`px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1 ${hasClearedTest ? 'btn-surface text-[#4ade80]' : 'bg-[#111114] border border-[#1f1f23] text-[#27272a]'}`}
-            ><Save className="w-3.5 h-3.5" /> Save</button>
+            <button onClick={handleSave} disabled={!hasClearedTest || saving}
+              className={`px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1 ${hasClearedTest && !saving ? 'btn-surface text-[#4ade80]' : 'bg-[#111114] border border-[#1f1f23] text-[#27272a]'}`}
+            ><Save className="w-3.5 h-3.5" /> {saving ? 'Saving...' : 'Save'}</button>
             <button onClick={onCancel} className="btn-surface text-[#71717a] px-2 py-1.5 rounded-md"><X className="w-4 h-4" /></button>
           </div>
         </div>
@@ -304,11 +315,11 @@ export function LevelEditor({ onSave, onCancel }: Props) {
           <button onClick={handleTestPlay} className="w-full bg-[#22d3ee]/[0.08] hover:bg-[#22d3ee]/[0.15] border border-[#22d3ee]/15 hover:border-[#22d3ee]/30 text-[#22d3ee] py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all">
             <Play className="w-4 h-4" /> Test Play
           </button>
-          <button onClick={handleSave} disabled={!hasClearedTest}
+          <button onClick={handleSave} disabled={!hasClearedTest || saving}
             className={`w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-              hasClearedTest ? 'bg-[#4ade80]/[0.08] hover:bg-[#4ade80]/[0.15] border border-[#4ade80]/15 hover:border-[#4ade80]/30 text-[#4ade80]' : 'bg-[#111114] border border-[#1f1f23] text-[#27272a] cursor-not-allowed'
+              hasClearedTest && !saving ? 'bg-[#4ade80]/[0.08] hover:bg-[#4ade80]/[0.15] border border-[#4ade80]/15 hover:border-[#4ade80]/30 text-[#4ade80]' : 'bg-[#111114] border border-[#1f1f23] text-[#27272a] cursor-not-allowed'
             }`}
-          ><Save className="w-4 h-4" /> Save & Publish</button>
+          ><Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save & Publish'}</button>
           <button onClick={onCancel} className="w-full bg-[#18181b] hover:bg-[#1f1f23] border border-[#27272a] hover:border-[#3f3f46] text-[#71717a] py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all">
             <X className="w-4 h-4" /> Cancel
           </button>

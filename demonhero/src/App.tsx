@@ -173,8 +173,8 @@ export default function App() {
   };
 
   const handleSaveLevel = async (rooms: RoomData[]) => {
-    if (!user) return;
-    
+    if (!user) throw new Error('Not authenticated');
+
     const levelId = `level-${Date.now()}`;
     const newLevel = {
       id: levelId,
@@ -192,7 +192,8 @@ export default function App() {
       await setDoc(doc(db, 'levels', levelId), newLevel);
       setScreen('demon_dash');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'levels');
+      console.error('Save level failed:', error);
+      throw error; // propagate to LevelEditor for visible feedback
     }
   };
 
