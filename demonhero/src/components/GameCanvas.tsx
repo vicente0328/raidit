@@ -74,6 +74,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
     let transitionTimer = 0;
     let embers: Ember[] = [];
     let slashTrails: { x: number; y: number; angle: number; life: number; size: number }[] = [];
+    let hitSparks: { x: number; y: number; vx: number; vy: number; life: number; size: number; color: string }[] = [];
 
     // Juice systems
     let coyoteTimer = 0;        // frames since leaving ground (coyote time)
@@ -197,18 +198,38 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       }
     };
 
+    const spawnHitSparks = (x: number, y: number, count: number = 8) => {
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.5;
+        const speed = 3 + Math.random() * 5;
+        hitSparks.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 10 + Math.random() * 10,
+          size: 2 + Math.random() * 3,
+          color: Math.random() > 0.4 ? '#22d3ee' : '#ffffff'
+        });
+      }
+    };
+
+    const tryVibrate = (pattern: number | number[]) => {
+      try { navigator?.vibrate?.(pattern); } catch (_) {}
+    };
+
     const worldH = level.rooms[0].grid.length * T;
 
     const update = () => {
-      // Hit-stop: freeze game for impact feel
-      if (hitStopTimer > 0) {
+      const frozen = hitStopTimer > 0;
+      if (frozen) {
         hitStopTimer--;
-        // Still render, just don't update game state
-        animationFrameId = requestAnimationFrame(update);
-        return;
       }
 
       frameCount++;
+
+      if (frozen) {
+        // Skip physics — jump straight to render
+      } else {
 
       // === PHYSICS ===
       player.vy += 1.0;
@@ -300,14 +321,15 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         for (let i = 0; i < 8; i++) spawnEmber(player.x + player.w / 2, player.y + player.h / 2, '#cc2200');
       }
 
-      // Attack
+      // Attack — generous hitbox for mobile forgiveness (+20% range)
       if (keys.Space && player.attackTimer <= 0) {
         player.attackTimer = 20;
+        const atkW = 72; // generous attack range
         const hitBox = {
-          x: player.facingRight ? player.x + player.w : player.x - 60,
-          y: player.y,
-          w: 60,
-          h: player.h
+          x: player.facingRight ? player.x + player.w - 4 : player.x - atkW + 4,
+          y: player.y - 6,
+          w: atkW,
+          h: player.h + 12
         };
 
         spawnSlash(
@@ -320,12 +342,15 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         for (const e of enemies) {
           if (checkCol(hitBox, e)) {
             const knockDir = player.facingRight ? 1 : -1;
+            const hitX = player.facingRight ? e.x : e.x + e.w;
+            const hitY = e.y + e.h * 0.4;
             if (e.type === BlockType.BOSS) {
               if (e.weak) {
                 e.hp -= 1;
                 e.hitFlash = 8;
                 e.x += knockDir * 8;
                 e.vy = -3;
+                spawnHitSparks(hitX, hitY, 10);
                 for (let i = 0; i < 8; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
                 didHitEnemy = true;
               }
@@ -334,16 +359,18 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
               e.hitFlash = 8;
               e.x += knockDir * 20;
               e.vy = -4;
+              spawnHitSparks(hitX, hitY, 8);
               for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
               didHitEnemy = true;
             }
           }
         }
-        // Hit-stop + screen shake on successful hit
+        // Hit-stop + screen shake + haptic on successful hit
         if (didHitEnemy) {
-          hitStopTimer = 3; // ~0.05s freeze
+          hitStopTimer = 5; // ~0.08s freeze for impact
           screenShakeTimer = 6;
           screenShakeIntensity = 4;
+          tryVibrate(20); // short haptic tap
         }
       }
       if (player.attackTimer > 0) player.attackTimer--;
@@ -499,12 +526,19 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         }
       }
 
-      // Damage
+      // Damage — hurtbox is ~15% smaller than collision for mobile forgiveness
       if (player.invulnTimer <= 0) {
+        const shrink = 4;
+        const hurtBox = {
+          x: player.x + shrink,
+          y: player.y + shrink,
+          w: player.w - shrink * 2,
+          h: player.h - shrink
+        };
         let hit = false;
-        for (const s of spikes) if (checkCol(player, s)) hit = true;
-        for (const e of enemies) if (checkCol(player, e)) hit = true;
-        for (const p of projectiles) if (checkCol(player, p)) hit = true;
+        for (const s of spikes) if (checkCol(hurtBox, s)) hit = true;
+        for (const e of enemies) if (checkCol(hurtBox, e)) hit = true;
+        for (const p of projectiles) if (checkCol(hurtBox, p)) hit = true;
         if (hit) {
           player.hp -= 1;
           player.invulnTimer = 60;
@@ -513,6 +547,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
           damageFlashTimer = 20;
           screenShakeTimer = 8;
           screenShakeIntensity = 6;
+          tryVibrate([100, 50, 100]); // strong haptic on damage
           for (let i = 0; i < 8; i++) spawnEmber(player.x + player.w / 2, player.y + player.h / 2, '#cc2200');
         }
       }
@@ -532,6 +567,8 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       }
 
       if (player.hp <= 0) { onLose(); return; }
+
+      } // end of !frozen physics block
 
       // === CAMERA ===
       // Smooth horizontal follow
@@ -804,6 +841,28 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         ctx.lineWidth = 2 * alpha;
         ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.5})`;
         ctx.stroke();
+        ctx.restore();
+      }
+
+      // Hit sparks — cyan/white burst on enemy hit
+      for (let i = hitSparks.length - 1; i >= 0; i--) {
+        const sp = hitSparks[i];
+        sp.x += sp.vx;
+        sp.y += sp.vy;
+        sp.vx *= 0.9; // friction
+        sp.vy *= 0.9;
+        sp.life--;
+        if (sp.life <= 0) { hitSparks.splice(i, 1); continue; }
+        const alpha = sp.life / 20;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = sp.color;
+        ctx.fillStyle = sp.color;
+        // Draw cross/star shape
+        const sz = sp.size * alpha;
+        ctx.fillRect(sp.x - sz, sp.y - 1, sz * 2, 2);
+        ctx.fillRect(sp.x - 1, sp.y - sz, 2, sz * 2);
         ctx.restore();
       }
 
