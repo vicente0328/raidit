@@ -58,7 +58,6 @@ export function LevelEditor({ onSave, onCancel }: Props) {
   const [message, setMessage] = useState<{ text: string, type: 'error' | 'success' } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
-  const [drawMode, setDrawMode] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(40);
 
@@ -90,11 +89,9 @@ export function LevelEditor({ onSave, onCancel }: Props) {
     setMessage(null);
   }, [currentRoom, selectedBlock]);
 
-  const drawModeRef = useRef(drawMode);
-  useEffect(() => { drawModeRef.current = drawMode; }, [drawMode]);
-
+  // 1 finger = draw, 2 fingers = scroll (browser handles pan-y)
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!drawModeRef.current) return;
+    if (e.touches.length >= 2) return; // let browser handle 2-finger scroll
     e.preventDefault();
     const touch = e.touches[0];
     const grid = gridContainerRef.current;
@@ -195,7 +192,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
             style={{
               display: 'grid',
               gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)`,
-              touchAction: drawMode ? 'none' : 'pan-y',
+              touchAction: 'pan-y',
             }}
             onTouchStart={handleTouchStart}
           >
@@ -217,15 +214,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
         {/* Bottom palette */}
         <div className="shrink-0 border-t border-[#27272a] bg-[#111114]" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
           <div className="flex items-center px-3 py-1.5 gap-2">
-            <button onClick={() => setDrawMode(!drawMode)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-md font-semibold text-xs transition-all ${
-                drawMode
-                  ? 'bg-[#c084fc]/15 border border-[#c084fc]/30 text-[#c084fc]'
-                  : 'bg-[#18181b] border border-[#27272a] text-[#52525b]'
-              }`}
-            >
-              {drawMode ? 'Draw ON' : 'Scroll'}
-            </button>
+            <span className="flex-shrink-0 text-[10px] text-[#3f3f46]">1-tap: draw / 2-finger: scroll</span>
             <button onClick={() => setShowPalette(!showPalette)}
               className="flex-1 flex items-center justify-center gap-2 text-[#52525b] text-xs"
             >
