@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Faction } from '../types';
-import { Sword, Skull, LogIn, Mail, UserPlus, ChevronRight } from 'lucide-react';
+import { Sword, Skull, LogIn, Mail, UserPlus, ChevronRight, Shield, Flame, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { loginWithGoogle, loginWithEmail, signUpWithEmail } from '../firebase';
+import { loginWithGoogle, loginWithEmail, signUpWithEmail, logout } from '../firebase';
 
 interface Props {
   onSelectFaction: (faction: Faction) => void;
@@ -28,11 +28,11 @@ export function Home({ onSelectFaction, user }: Props) {
     } catch (err: any) {
       const code = err?.code || '';
       if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        setError('Invalid email or password.');
       } else if (code === 'auth/invalid-email') {
-        setError('올바른 이메일 형식이 아닙니다.');
+        setError('Invalid email format.');
       } else {
-        setError('로그인 실패: ' + (err?.message || '알 수 없는 오류'));
+        setError('Login failed: ' + (err?.message || 'Unknown error'));
       }
     } finally {
       setLoading(false);
@@ -43,11 +43,11 @@ export function Home({ onSelectFaction, user }: Props) {
     e.preventDefault();
     setError('');
     if (password.length < 6) {
-      setError('비밀번호는 6자 이상이어야 합니다.');
+      setError('Password must be at least 6 characters.');
       return;
     }
     if (!displayName.trim()) {
-      setError('모험가 이름을 입력해주세요.');
+      setError('Please enter your adventurer name.');
       return;
     }
     setLoading(true);
@@ -56,13 +56,13 @@ export function Home({ onSelectFaction, user }: Props) {
     } catch (err: any) {
       const code = err?.code || '';
       if (code === 'auth/email-already-in-use') {
-        setError('이미 사용 중인 이메일입니다.');
+        setError('This email is already in use.');
       } else if (code === 'auth/invalid-email') {
-        setError('올바른 이메일 형식이 아닙니다.');
+        setError('Invalid email format.');
       } else if (code === 'auth/weak-password') {
-        setError('비밀번호가 너무 약합니다. 6자 이상 입력하세요.');
+        setError('Password is too weak.');
       } else {
-        setError('가입 실패: ' + (err?.message || '알 수 없는 오류'));
+        setError('Sign up failed: ' + (err?.message || 'Unknown error'));
       }
     } finally {
       setLoading(false);
@@ -77,9 +77,9 @@ export function Home({ onSelectFaction, user }: Props) {
     } catch (err: any) {
       const code = err?.code || '';
       if (code === 'auth/unauthorized-domain') {
-        setError('이 도메인이 Firebase에 등록되지 않았습니다. 관리자에게 문의하세요.');
+        setError('This domain is not authorized. Contact admin.');
       } else if (code !== 'auth/popup-closed-by-user') {
-        setError('Google 로그인 실패: ' + (err?.message || '알 수 없는 오류'));
+        setError('Google login failed: ' + (err?.message || 'Unknown error'));
       }
     } finally {
       setLoading(false);
@@ -87,47 +87,75 @@ export function Home({ onSelectFaction, user }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-dungeon flex flex-col items-center justify-center text-[#e8dcc8] font-sans p-4 relative overflow-hidden">
-      {/* Ambient torch glows */}
-      <div className="absolute top-1/4 left-1/6 w-64 h-64 bg-[#c2410c]/10 rounded-full blur-[100px] pointer-events-none animate-torch"></div>
-      <div className="absolute bottom-1/3 right-1/5 w-80 h-80 bg-[#d4a017]/8 rounded-full blur-[120px] pointer-events-none animate-torch" style={{ animationDelay: '1.5s' }}></div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#4c1d95]/5 rounded-full blur-[150px] pointer-events-none"></div>
+    <div className="min-h-[100dvh] bg-[#080604] flex flex-col items-center justify-center text-[#e8dcc8] font-sans p-4 relative overflow-hidden">
+      {/* Animated background layers */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-0 right-0 h-full bg-[radial-gradient(ellipse_at_top,rgba(124,58,237,0.08)_0%,transparent_60%)]"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-full bg-[radial-gradient(ellipse_at_bottom,rgba(194,65,12,0.06)_0%,transparent_50%)]"></div>
+        <div className="absolute top-1/3 left-1/4 w-[300px] h-[300px] bg-[#d4a017]/[0.03] rounded-full blur-[120px] animate-torch"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-[#7c3aed]/[0.04] rounded-full blur-[150px] animate-torch" style={{ animationDelay: '2s' }}></div>
+      </div>
 
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#d4a017]/30 to-transparent"></div>
+      {/* Top accent line */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#d4a017]/40 to-transparent"></div>
 
+      {/* Title Section */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1, ease: "easeOut" }}
-        className="text-center mb-16 relative z-10"
+        transition={{ duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }}
+        className="text-center mb-10 md:mb-14 relative z-10"
       >
-        <div className="flex items-center justify-center gap-4 mb-6">
-          <div className="w-20 h-px bg-gradient-to-r from-transparent to-[#d4a017]/50"></div>
-          <span className="text-[#d4a017] text-xs tracking-[0.3em] font-medieval uppercase">A Dark Fantasy Dungeon Game</span>
-          <div className="w-20 h-px bg-gradient-to-l from-transparent to-[#d4a017]/50"></div>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.8 }}
+          className="text-[#8b7355] text-[10px] md:text-xs tracking-[0.4em] font-medieval uppercase mb-4 md:mb-6"
+        >
+          Dark Fantasy Tower Defense
+        </motion.p>
+
+        <div className="flex items-center justify-center gap-3 md:gap-6 mb-4 md:mb-6">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.5, duration: 0.8 }}
+          >
+            <Skull className="w-8 h-8 md:w-14 md:h-14 text-[#7c3aed] drop-shadow-[0_0_15px_rgba(124,58,237,0.5)]" />
+          </motion.div>
+
+          <h1 className="text-4xl md:text-7xl lg:text-8xl font-display font-black tracking-wider">
+            <span className="bg-gradient-to-b from-[#fff8e7] via-[#d4a017] to-[#6b4d0a] text-transparent bg-clip-text">
+              RAID IT
+            </span>
+          </h1>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.5, duration: 0.8 }}
+          >
+            <Sword className="w-8 h-8 md:w-14 md:h-14 text-[#d4a017] drop-shadow-[0_0_15px_rgba(212,160,23,0.5)]" />
+          </motion.div>
         </div>
 
-        <h1 className="text-5xl md:text-8xl font-display font-black mb-6 tracking-wider flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
-          <Skull className="w-14 h-14 md:w-20 md:h-20 text-[#7c3aed] drop-shadow-[0_0_20px_rgba(124,58,237,0.6)]" />
-          <span className="bg-gradient-to-b from-[#f5e6c8] via-[#d4a017] to-[#8b6914] text-transparent bg-clip-text drop-shadow-2xl">
-            마왕 대 용사
-          </span>
-          <Sword className="w-14 h-14 md:w-20 md:h-20 text-[#d4a017] drop-shadow-[0_0_20px_rgba(212,160,23,0.6)]" />
-        </h1>
-
-        <p className="text-[#8b7355] text-lg md:text-2xl font-medieval tracking-[0.25em] uppercase">Demon Lord vs Hero</p>
-
-        <div className="flex items-center justify-center mt-6">
-          <div className="w-32 h-px bg-gradient-to-r from-transparent via-[#5a4d3e] to-transparent"></div>
-        </div>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7, duration: 0.8 }}
+          className="text-[#5a4d3e] text-sm md:text-lg font-medieval tracking-[0.15em]"
+        >
+          Build towers. Raid towers. Claim glory.
+        </motion.p>
       </motion.div>
 
       {!user ? (
+        /* ===== LOGIN SECTION ===== */
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          className="relative z-10 w-full max-w-sm"
+          transition={{ duration: 0.6, delay: 0.8 }}
+          className="relative z-10 w-full max-w-[360px]"
         >
           <AnimatePresence mode="wait">
             {authMode === 'choose' && (
@@ -141,33 +169,37 @@ export function Home({ onSelectFaction, user }: Props) {
                 <button
                   onClick={handleGoogleLogin}
                   disabled={loading}
-                  className="group flex items-center justify-center gap-3 btn-medieval px-8 py-4 rounded-xl font-medieval font-bold text-base text-[#d4a017] hover:text-[#f0c85a] transition-all disabled:opacity-50"
+                  className="group flex items-center justify-center gap-3 bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.08] hover:border-white/[0.15] backdrop-blur-sm px-6 py-4 rounded-2xl font-medieval font-bold text-sm text-[#e8dcc8] transition-all duration-300 disabled:opacity-50"
                 >
-                  <LogIn className="w-5 h-5" />
-                  {loading ? '연결 중...' : 'Google 계정으로 입장'}
+                  <LogIn className="w-4 h-4 text-[#d4a017]" />
+                  {loading ? 'Connecting...' : 'Continue with Google'}
                 </button>
 
-                <div className="flex items-center gap-3 my-2">
-                  <div className="flex-1 h-px bg-[#3d3630]/50"></div>
-                  <span className="text-[#5a4d3e] text-xs font-medieval tracking-wider">또는</span>
-                  <div className="flex-1 h-px bg-[#3d3630]/50"></div>
+                <div className="flex items-center gap-3 my-1">
+                  <div className="flex-1 h-px bg-white/[0.06]"></div>
+                  <span className="text-[#5a4d3e] text-[10px] font-medieval tracking-[0.2em] uppercase">or</span>
+                  <div className="flex-1 h-px bg-white/[0.06]"></div>
                 </div>
 
                 <button
                   onClick={() => { setAuthMode('login'); setError(''); }}
-                  className="group flex items-center justify-center gap-3 btn-medieval px-8 py-4 rounded-xl font-medieval font-bold text-base text-[#c4a882] hover:text-[#e8dcc8] transition-all"
+                  className="group flex items-center justify-center gap-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.1] px-6 py-4 rounded-2xl font-medieval font-bold text-sm text-[#8b7355] hover:text-[#c4a882] transition-all duration-300"
                 >
-                  <Mail className="w-5 h-5" />
-                  이메일로 로그인
+                  <Mail className="w-4 h-4" />
+                  Sign in with Email
                 </button>
 
                 <button
                   onClick={() => { setAuthMode('signup'); setError(''); }}
-                  className="flex items-center justify-center gap-2 text-[#5a4d3e] hover:text-[#8b7355] text-sm font-medieval transition-colors mt-1"
+                  className="flex items-center justify-center gap-2 text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors mt-2"
                 >
-                  <UserPlus className="w-4 h-4" />
-                  계정이 없으신가요? 회원가입
+                  <UserPlus className="w-3.5 h-3.5" />
+                  New here? Create account
                 </button>
+
+                {error && (
+                  <p className="text-[#cc2200] text-xs font-medieval text-center mt-2 bg-[#cc2200]/[0.06] border border-[#cc2200]/[0.15] rounded-xl p-3">{error}</p>
+                )}
               </motion.div>
             )}
 
@@ -180,53 +212,27 @@ export function Home({ onSelectFaction, user }: Props) {
                 onSubmit={handleEmailLogin}
                 className="flex flex-col gap-3"
               >
-                <h3 className="text-center font-display text-xl text-[#d4a017] tracking-wider mb-2">로그인</h3>
+                <h3 className="text-center font-display text-lg text-[#d4a017] tracking-[0.15em] mb-1">SIGN IN</h3>
 
-                <input
-                  type="email"
-                  placeholder="이메일"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  className="w-full bg-[#1a1510] border border-[#3d3630] rounded-xl px-4 py-3 text-[#e8dcc8] font-medieval placeholder-[#5a4d3e] focus:border-[#d4a017]/50 focus:outline-none transition-colors"
-                />
-                <input
-                  type="password"
-                  placeholder="비밀번호"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  className="w-full bg-[#1a1510] border border-[#3d3630] rounded-xl px-4 py-3 text-[#e8dcc8] font-medieval placeholder-[#5a4d3e] focus:border-[#d4a017]/50 focus:outline-none transition-colors"
-                />
+                <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3.5 text-[#e8dcc8] text-sm font-medieval placeholder-[#5a4d3e] focus:border-[#d4a017]/40 focus:bg-white/[0.06] focus:outline-none transition-all" />
+                <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3.5 text-[#e8dcc8] text-sm font-medieval placeholder-[#5a4d3e] focus:border-[#d4a017]/40 focus:bg-white/[0.06] focus:outline-none transition-all" />
 
-                {error && (
-                  <p className="text-[#cc2200] text-xs font-medieval text-center bg-[#8b0000]/10 border border-[#8b0000]/20 rounded-lg p-2">{error}</p>
-                )}
+                {error && <p className="text-[#cc2200] text-xs font-medieval text-center bg-[#cc2200]/[0.06] border border-[#cc2200]/[0.15] rounded-xl p-2.5">{error}</p>}
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-medieval px-8 py-4 rounded-xl font-medieval font-bold text-base text-[#d4a017] hover:text-[#f0c85a] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                <button type="submit" disabled={loading}
+                  className="bg-gradient-to-r from-[#d4a017]/20 to-[#8b6914]/20 hover:from-[#d4a017]/30 hover:to-[#8b6914]/30 border border-[#d4a017]/30 px-6 py-4 rounded-xl font-medieval font-bold text-sm text-[#d4a017] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  <ChevronRight className="w-5 h-5" />
-                  {loading ? '입장 중...' : '입장하기'}
+                  <ChevronRight className="w-4 h-4" />
+                  {loading ? 'Signing in...' : 'Enter'}
                 </button>
 
                 <div className="flex items-center justify-between mt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('choose'); setError(''); }}
-                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors"
-                  >
-                    ← 뒤로
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('signup'); setError(''); }}
-                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors"
-                  >
-                    회원가입 →
-                  </button>
+                  <button type="button" onClick={() => { setAuthMode('choose'); setError(''); }}
+                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors">← Back</button>
+                  <button type="button" onClick={() => { setAuthMode('signup'); setError(''); }}
+                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors">Create account →</button>
                 </div>
               </motion.form>
             )}
@@ -240,120 +246,138 @@ export function Home({ onSelectFaction, user }: Props) {
                 onSubmit={handleEmailSignUp}
                 className="flex flex-col gap-3"
               >
-                <h3 className="text-center font-display text-xl text-[#7c3aed] tracking-wider mb-2">모험가 등록</h3>
+                <h3 className="text-center font-display text-lg text-[#7c3aed] tracking-[0.15em] mb-1">CREATE ACCOUNT</h3>
 
-                <input
-                  type="text"
-                  placeholder="모험가 이름"
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  required
-                  className="w-full bg-[#1a1510] border border-[#3d3630] rounded-xl px-4 py-3 text-[#e8dcc8] font-medieval placeholder-[#5a4d3e] focus:border-[#7c3aed]/50 focus:outline-none transition-colors"
-                />
-                <input
-                  type="email"
-                  placeholder="이메일"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  className="w-full bg-[#1a1510] border border-[#3d3630] rounded-xl px-4 py-3 text-[#e8dcc8] font-medieval placeholder-[#5a4d3e] focus:border-[#7c3aed]/50 focus:outline-none transition-colors"
-                />
-                <input
-                  type="password"
-                  placeholder="비밀번호 (6자 이상)"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="w-full bg-[#1a1510] border border-[#3d3630] rounded-xl px-4 py-3 text-[#e8dcc8] font-medieval placeholder-[#5a4d3e] focus:border-[#7c3aed]/50 focus:outline-none transition-colors"
-                />
+                <input type="text" placeholder="Adventurer Name" value={displayName} onChange={e => setDisplayName(e.target.value)} required
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3.5 text-[#e8dcc8] text-sm font-medieval placeholder-[#5a4d3e] focus:border-[#7c3aed]/40 focus:bg-white/[0.06] focus:outline-none transition-all" />
+                <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3.5 text-[#e8dcc8] text-sm font-medieval placeholder-[#5a4d3e] focus:border-[#7c3aed]/40 focus:bg-white/[0.06] focus:outline-none transition-all" />
+                <input type="password" placeholder="Password (6+ chars)" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3.5 text-[#e8dcc8] text-sm font-medieval placeholder-[#5a4d3e] focus:border-[#7c3aed]/40 focus:bg-white/[0.06] focus:outline-none transition-all" />
 
-                {error && (
-                  <p className="text-[#cc2200] text-xs font-medieval text-center bg-[#8b0000]/10 border border-[#8b0000]/20 rounded-lg p-2">{error}</p>
-                )}
+                {error && <p className="text-[#cc2200] text-xs font-medieval text-center bg-[#cc2200]/[0.06] border border-[#cc2200]/[0.15] rounded-xl p-2.5">{error}</p>}
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-medieval px-8 py-4 rounded-xl font-medieval font-bold text-base text-[#7c3aed] hover:text-[#a78bfa] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                <button type="submit" disabled={loading}
+                  className="bg-gradient-to-r from-[#7c3aed]/20 to-[#4c1d95]/20 hover:from-[#7c3aed]/30 hover:to-[#4c1d95]/30 border border-[#7c3aed]/30 px-6 py-4 rounded-xl font-medieval font-bold text-sm text-[#a78bfa] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  <UserPlus className="w-5 h-5" />
-                  {loading ? '등록 중...' : '모험 시작'}
+                  <UserPlus className="w-4 h-4" />
+                  {loading ? 'Creating...' : 'Begin Adventure'}
                 </button>
 
                 <div className="flex items-center justify-between mt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('choose'); setError(''); }}
-                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors"
-                  >
-                    ← 뒤로
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('login'); setError(''); }}
-                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors"
-                  >
-                    로그인 →
-                  </button>
+                  <button type="button" onClick={() => { setAuthMode('choose'); setError(''); }}
+                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors">← Back</button>
+                  <button type="button" onClick={() => { setAuthMode('login'); setError(''); }}
+                    className="text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors">Sign in →</button>
                 </div>
               </motion.form>
             )}
           </AnimatePresence>
-
-          {error && authMode === 'choose' && (
-            <p className="text-[#cc2200] text-xs font-medieval text-center mt-3 bg-[#8b0000]/10 border border-[#8b0000]/20 rounded-lg p-2">{error}</p>
-          )}
         </motion.div>
       ) : (
-        <div className="flex flex-col md:flex-row gap-8 w-full max-w-5xl justify-center relative z-10">
-          {/* Demon Faction Card */}
-          <motion.button
-            initial={{ opacity: 0, x: -60 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
-            onClick={() => onSelectFaction('demon')}
-            className="group relative w-full md:w-96 h-[420px] card-stone rounded-2xl p-8 flex flex-col items-center justify-center transition-all duration-500 hover:-translate-y-3 overflow-hidden"
+        /* ===== FACTION SELECT ===== */
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+          className="relative z-10 w-full max-w-2xl"
+        >
+          {/* Welcome bar */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="flex items-center justify-between mb-8 md:mb-10 px-1"
           >
-            <div className="absolute inset-0 bg-gradient-to-b from-[#4c1d95]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"></div>
-            <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-[#4c1d95]/30 group-hover:border-[#7c3aed]/60 transition-colors"></div>
-            <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-[#4c1d95]/30 group-hover:border-[#7c3aed]/60 transition-colors"></div>
-            <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-[#4c1d95]/30 group-hover:border-[#7c3aed]/60 transition-colors"></div>
-            <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-[#4c1d95]/30 group-hover:border-[#7c3aed]/60 transition-colors"></div>
-
-            <Skull className="w-24 h-24 text-[#7c3aed] mb-8 transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_25px_rgba(124,58,237,0.7)] relative z-10" />
-            <h2 className="text-3xl font-display font-bold mb-4 tracking-wider text-[#e8dcc8] relative z-10">마왕 진영</h2>
-            <div className="w-12 h-px bg-[#4c1d95]/50 mb-4 group-hover:w-20 transition-all"></div>
-            <p className="text-[#8b7355] text-center leading-relaxed font-medieval relative z-10">
-              나만의 마왕탑을 설계하고<br/>도전하는 용사들을 좌절시키세요.
+            <p className="text-[#5a4d3e] text-xs md:text-sm font-medieval">
+              Welcome, <span className="text-[#c4a882]">{user.displayName || 'Adventurer'}</span>
             </p>
-          </motion.button>
+            <button
+              onClick={logout}
+              className="flex items-center gap-1.5 text-[#5a4d3e] hover:text-[#8b7355] text-xs font-medieval transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Logout
+            </button>
+          </motion.div>
 
-          {/* Hero Faction Card */}
-          <motion.button
-            initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
-            onClick={() => onSelectFaction('hero')}
-            className="group relative w-full md:w-96 h-[420px] card-stone rounded-2xl p-8 flex flex-col items-center justify-center transition-all duration-500 hover:-translate-y-3 overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-[#d4a017]/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"></div>
-            <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-[#8b6914]/30 group-hover:border-[#d4a017]/60 transition-colors"></div>
-            <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-[#8b6914]/30 group-hover:border-[#d4a017]/60 transition-colors"></div>
-            <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-[#8b6914]/30 group-hover:border-[#d4a017]/60 transition-colors"></div>
-            <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-[#8b6914]/30 group-hover:border-[#d4a017]/60 transition-colors"></div>
+          <p className="text-center text-[#5a4d3e] text-xs md:text-sm font-medieval tracking-[0.2em] uppercase mb-6">
+            Choose your path
+          </p>
 
-            <Sword className="w-24 h-24 text-[#d4a017] mb-8 transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_25px_rgba(212,160,23,0.7)] relative z-10" />
-            <h2 className="text-3xl font-display font-bold mb-4 tracking-wider text-[#e8dcc8] relative z-10">용사 진영</h2>
-            <div className="w-12 h-px bg-[#d4a017]/50 mb-4 group-hover:w-20 transition-all"></div>
-            <p className="text-[#8b7355] text-center leading-relaxed font-medieval relative z-10">
-              악명 높은 마왕탑을 공략하고<br/>전설적인 명성을 얻으세요.
-            </p>
-          </motion.button>
-        </div>
+          <div className="grid grid-cols-2 gap-3 md:gap-6">
+            {/* Demon Card */}
+            <motion.button
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              onClick={() => onSelectFaction('demon')}
+              className="group relative rounded-2xl md:rounded-3xl p-5 md:p-8 flex flex-col items-center text-center transition-all duration-500 active:scale-[0.97]
+                bg-gradient-to-b from-[#1a1520] to-[#0d0a10] border border-[#7c3aed]/[0.12] hover:border-[#7c3aed]/30
+                shadow-[0_4px_30px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_40px_rgba(124,58,237,0.15)]"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-[#7c3aed]/[0.06] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl md:rounded-3xl"></div>
+
+              <div className="relative mb-4 md:mb-6">
+                <div className="absolute inset-0 bg-[#7c3aed]/20 rounded-full blur-2xl scale-150 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <Skull className="w-12 h-12 md:w-20 md:h-20 text-[#7c3aed] relative z-10 transition-transform duration-500 group-hover:scale-110" />
+              </div>
+
+              <h2 className="text-lg md:text-2xl font-display font-bold tracking-wider text-[#e8dcc8] mb-2 md:mb-3 relative z-10">Demon Lord</h2>
+
+              <div className="flex items-center gap-1.5 mb-3 md:mb-4">
+                <Flame className="w-3 h-3 text-[#7c3aed]/60" />
+                <span className="text-[10px] md:text-xs text-[#7c3aed]/70 font-medieval tracking-wider uppercase">Build & Defend</span>
+                <Flame className="w-3 h-3 text-[#7c3aed]/60" />
+              </div>
+
+              <p className="text-[#6b5d6e] text-xs md:text-sm font-medieval leading-relaxed relative z-10 hidden md:block">
+                Design deadly tower traps.<br/>
+                Crush every challenger.
+              </p>
+              <p className="text-[#6b5d6e] text-[10px] font-medieval relative z-10 md:hidden">
+                Design & defend towers
+              </p>
+            </motion.button>
+
+            {/* Hero Card */}
+            <motion.button
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.65 }}
+              onClick={() => onSelectFaction('hero')}
+              className="group relative rounded-2xl md:rounded-3xl p-5 md:p-8 flex flex-col items-center text-center transition-all duration-500 active:scale-[0.97]
+                bg-gradient-to-b from-[#1a1810] to-[#0d0a07] border border-[#d4a017]/[0.12] hover:border-[#d4a017]/30
+                shadow-[0_4px_30px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_40px_rgba(212,160,23,0.15)]"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-[#d4a017]/[0.06] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl md:rounded-3xl"></div>
+
+              <div className="relative mb-4 md:mb-6">
+                <div className="absolute inset-0 bg-[#d4a017]/20 rounded-full blur-2xl scale-150 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <Shield className="w-12 h-12 md:w-20 md:h-20 text-[#d4a017] relative z-10 transition-transform duration-500 group-hover:scale-110" />
+              </div>
+
+              <h2 className="text-lg md:text-2xl font-display font-bold tracking-wider text-[#e8dcc8] mb-2 md:mb-3 relative z-10">Hero</h2>
+
+              <div className="flex items-center gap-1.5 mb-3 md:mb-4">
+                <Sword className="w-3 h-3 text-[#d4a017]/60" />
+                <span className="text-[10px] md:text-xs text-[#d4a017]/70 font-medieval tracking-wider uppercase">Raid & Conquer</span>
+                <Sword className="w-3 h-3 text-[#d4a017]/60" />
+              </div>
+
+              <p className="text-[#6b6050] text-xs md:text-sm font-medieval leading-relaxed relative z-10 hidden md:block">
+                Storm impossible towers.<br/>
+                Claim legendary glory.
+              </p>
+              <p className="text-[#6b6050] text-[10px] font-medieval relative z-10 md:hidden">
+                Raid & claim glory
+              </p>
+            </motion.button>
+          </div>
+        </motion.div>
       )}
 
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#3d3630] to-transparent"></div>
+      {/* Bottom accent */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#3d3630]/30 to-transparent"></div>
     </div>
   );
 }
