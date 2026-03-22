@@ -130,7 +130,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       isGrounded: false,
       facingRight: true,
       attackTimer: 0,
-      invulnTimer: 0
+      invulnTimer: 0,
+      wallSlideDir: 0 as -1 | 0 | 1, // -1 = sliding left wall, 1 = right wall, 0 = not sliding
+      wallJumpCooldown: 0, // frames to ignore horizontal input after wall jump
     };
 
     let walls: { x: number; y: number; w: number; h: number }[] = [];
@@ -289,6 +291,11 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       } else {
 
       // === PHYSICS ===
+      const WALL_SLIDE_SPEED = 2;    // max fall speed while wall sliding
+      const WALL_JUMP_VY = -14;      // vertical kick off wall
+      const WALL_JUMP_VX = 8;        // horizontal kick off wall
+      const WALL_JUMP_LOCK = 8;      // frames to lock horizontal input after wall jump
+
       player.vy += 1.0;
 
       // Variable jump: cut jump short when key released
@@ -296,9 +303,14 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         player.vy = -4; // cap upward velocity for short hops
       }
 
-      if (keys.ArrowLeft) { player.vx = -MOVE_SPEED; player.facingRight = false; }
-      else if (keys.ArrowRight) { player.vx = MOVE_SPEED; player.facingRight = true; }
-      else { player.vx = 0; }
+      // Wall jump cooldown — temporarily override horizontal input
+      if (player.wallJumpCooldown > 0) {
+        player.wallJumpCooldown--;
+      } else {
+        if (keys.ArrowLeft) { player.vx = -MOVE_SPEED; player.facingRight = false; }
+        else if (keys.ArrowRight) { player.vx = MOVE_SPEED; player.facingRight = true; }
+        else { player.vx = 0; }
+      }
 
       // Coyote time tracking
       if (player.isGrounded) {
@@ -320,14 +332,21 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         player.isGrounded = false;
         coyoteTimer = 0;
         jumpBufferTimer = 0;
+        player.wallSlideDir = 0;
       }
 
       // Horizontal movement + collision
       player.x += player.vx;
+      let touchingWallDir: -1 | 0 | 1 = 0;
       for (const w of walls) {
         if (checkCol(player, w)) {
-          if (player.vx > 0) player.x = w.x - player.w;
-          else if (player.vx < 0) player.x = w.x + w.w;
+          if (player.vx > 0) {
+            player.x = w.x - player.w;
+            touchingWallDir = 1; // touching wall on right
+          } else if (player.vx < 0) {
+            player.x = w.x + w.w;
+            touchingWallDir = -1; // touching wall on left
+          }
           player.vx = 0;
         }
       }
@@ -357,6 +376,46 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             player.isGrounded = true;
           }
         }
+      }
+
+      // === WALL SLIDE & WALL JUMP ===
+      // Detect wall slide: airborne + falling + pressing toward wall + touching wall
+      const pressingTowardWall =
+        (touchingWallDir === 1 && keys.ArrowRight) ||
+        (touchingWallDir === -1 && keys.ArrowLeft);
+
+      if (!player.isGrounded && touchingWallDir !== 0 && pressingTowardWall && player.vy > 0) {
+        // Wall slide: slow the fall
+        player.wallSlideDir = touchingWallDir;
+        player.vy = Math.min(player.vy, WALL_SLIDE_SPEED);
+        // Spawn occasional slide particles
+        if (frameCount % 4 === 0) {
+          spawnEmber(
+            touchingWallDir === 1 ? player.x + player.w : player.x,
+            player.y + player.h * 0.6 + Math.random() * 10,
+            '#a1a1aa'
+          );
+        }
+      } else {
+        player.wallSlideDir = 0;
+      }
+
+      // Wall jump: press jump while wall sliding
+      if (player.wallSlideDir !== 0 && keys.ArrowUp && !prevArrowUp) {
+        player.vy = WALL_JUMP_VY;
+        player.vx = -player.wallSlideDir * WALL_JUMP_VX; // kick away from wall
+        player.facingRight = player.wallSlideDir < 0; // face away from wall
+        player.wallJumpCooldown = WALL_JUMP_LOCK;
+        player.wallSlideDir = 0;
+        coyoteTimer = 0;
+        jumpBufferTimer = 0;
+        // Wall kick particles burst
+        const sparkX = player.wallSlideDir === 1 ? player.x + player.w + 4 : player.x - 4;
+        spawnHitSparks(sparkX, player.y + player.h * 0.5, 5);
+        for (let i = 0; i < 4; i++) {
+          spawnEmber(sparkX, player.y + player.h * 0.3 + Math.random() * player.h * 0.4, '#71717a');
+        }
+        tryVibrate(10);
       }
 
       // Fall off bottom = damage + respawn at last ground
@@ -897,7 +956,12 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         const drawX = player.x + player.w / 2 - PLAYER_DRAW_W / 2;
         const drawY = player.y + player.h - PLAYER_DRAW_H;
 
-        if (!player.facingRight) {
+        // During wall slide, face away from wall
+        const renderFacingRight = player.wallSlideDir !== 0
+          ? player.wallSlideDir < 0   // on left wall → face right
+          : player.facingRight;
+
+        if (!renderFacingRight) {
           const cx = drawX + PLAYER_DRAW_W / 2;
           const cy = drawY + PLAYER_DRAW_H / 2;
           ctx.translate(cx, cy);
@@ -906,7 +970,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         }
 
         let heroSprite: HTMLImageElement;
-        if (player.attackTimer > 12) {
+        if (player.wallSlideDir !== 0) {
+          heroSprite = ANIM.hero.idle[0];
+        } else if (player.attackTimer > 12) {
           heroSprite = ANIM.hero.attack[0];
         } else if (Math.abs(player.vx) > 0) {
           heroSprite = ANIM.hero.run[Math.floor(frameCount / 8) % 2];
