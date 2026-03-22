@@ -1,5 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+  signOut,
+} from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, collection, addDoc, updateDoc, increment, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -21,30 +30,59 @@ export const db = firestoreDatabaseId && firestoreDatabaseId !== '(default)'
   : getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
+async function createUserProfile(user: { uid: string; displayName: string | null; photoURL: string | null; email: string | null }) {
+  const userRef = doc(db, 'users', user.uid);
+  const userSnap = await getDoc(userRef);
+
+  if (!userSnap.exists()) {
+    await setDoc(userRef, {
+      uid: user.uid,
+      displayName: user.displayName || '이름 없는 용사',
+      photoURL: user.photoURL || '',
+      email: user.email || '',
+      fame: 100,
+      infamy: 100,
+      createdAt: new Date().toISOString()
+    });
+  }
+}
+
 export const loginWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-    
-    // Check if user exists in Firestore
-    const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDoc(userRef);
-    
-    if (!userSnap.exists()) {
-      // Create new user profile
-      await setDoc(userRef, {
-        uid: user.uid,
-        displayName: user.displayName || '이름 없는 용사',
-        photoURL: user.photoURL || '',
-        email: user.email || '',
-        fame: 100,
-        infamy: 100,
-        createdAt: new Date().toISOString()
-      });
+    await createUserProfile(result.user);
+  } catch (error: any) {
+    // If popup blocked, try redirect
+    if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/popup-closed-by-user') {
+      try {
+        await signInWithRedirect(auth, googleProvider);
+      } catch (redirectError) {
+        console.error("Redirect login failed:", redirectError);
+        throw redirectError;
+      }
+    } else {
+      console.error("Google login error:", error?.code, error?.message);
+      throw error;
     }
-  } catch (error) {
-    console.error("Error logging in with Google:", error);
   }
+};
+
+export const signUpWithEmail = async (email: string, password: string, displayName: string) => {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  await updateProfile(result.user, { displayName });
+  await createUserProfile({
+    uid: result.user.uid,
+    displayName,
+    photoURL: null,
+    email,
+  });
+  return result.user;
+};
+
+export const loginWithEmail = async (email: string, password: string) => {
+  const result = await signInWithEmailAndPassword(auth, email, password);
+  await createUserProfile(result.user);
+  return result.user;
 };
 
 export const logout = () => signOut(auth);
