@@ -8,6 +8,7 @@ interface Props {
   level: LevelData;
   onWin: () => void;
   onLose: () => void;
+  onQuit?: () => void;
 }
 
 interface Ember {
@@ -24,7 +25,7 @@ const GAME_H = 10 * T; // 480 (portrait)
 // World height for one floor
 const WORLD_H = TOWER_ROWS * T; // 1200
 
-export function GameCanvas({ level, onWin, onLose }: Props) {
+export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const keysRef = useRef({ ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false });
@@ -84,12 +85,12 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     const COYOTE_FRAMES = 8;    // ~0.13s at 60fps
     const JUMP_BUFFER_FRAMES = 8;
 
-    // Player — collision box is 2 tiles, sprite renders slightly bigger
-    const PLAYER_DRAW_W = 2 * T + 16;
-    const PLAYER_DRAW_H = 2 * T + 24;
+    // Player — collision box is tight body (1 tile wide, ~1.5 tiles tall), sprite renders at 2 tiles
+    const PLAYER_DRAW_W = 2 * T;
+    const PLAYER_DRAW_H = 2 * T + 16;
     let player = {
-      x: 3 * T, y: (TOWER_ROWS - 3) * T - (2 * T - 4),
-      w: 2 * T - 4, h: 2 * T - 4, // collision fits in 2 tile space (92x92)
+      x: 3 * T, y: (TOWER_ROWS - 3) * T - (T + T / 2),
+      w: T - 8, h: T + T / 2, // collision: narrow body (40px wide, 72px tall) — no sword/arm overlap
       vx: 0, vy: 0,
       hp: 5,
       isGrounded: false,
@@ -928,13 +929,23 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       className="flex flex-col items-center justify-start md:justify-center min-h-[100dvh] bg-[#0d0a07] p-1 md:p-4 relative"
     >
-      <div className="mb-1 md:mb-4 text-center relative z-10 mt-1 md:mt-0">
-        <h2 className="text-lg md:text-3xl font-display font-black text-[#d4a017] tracking-widest glow-gold">{level.name}</h2>
-        <p className="text-[#8b7355] font-medieval tracking-wide text-[10px] md:text-sm">
-          제작자: <span className="text-[#e8dcc8]">{level.creator}</span>
-          <span className="mx-1.5 md:mx-3 text-[#3d3630]">|</span>
-          악명: <span className="text-[#7c3aed]">{level.infamy}</span>
-        </p>
+      <div className="mb-1 md:mb-4 text-center relative z-10 mt-1 md:mt-0 flex items-start justify-center gap-3">
+        <div>
+          <h2 className="text-lg md:text-3xl font-display font-black text-[#d4a017] tracking-widest glow-gold">{level.name}</h2>
+          <p className="text-[#8b7355] font-medieval tracking-wide text-[10px] md:text-sm">
+            제작자: <span className="text-[#e8dcc8]">{level.creator}</span>
+            <span className="mx-1.5 md:mx-3 text-[#3d3630]">|</span>
+            악명: <span className="text-[#7c3aed]">{level.infamy}</span>
+          </p>
+        </div>
+        {onQuit && (
+          <button
+            onClick={onQuit}
+            className="px-3 py-1.5 rounded-lg text-xs font-medieval text-[#8b7355] border border-[#3d3630]/50 hover:border-[#5a4d3e] hover:text-[#d4a017] transition-all bg-[#1a1510]/80"
+          >
+            포기
+          </button>
+        )}
       </div>
 
       <div className="relative z-10 rounded-lg border border-[#3d3630]/50 overflow-hidden">

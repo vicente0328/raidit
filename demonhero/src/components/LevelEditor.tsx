@@ -49,16 +49,32 @@ interface Props {
 }
 
 
+// Migrate old grids to current TOWER_ROWS x TOWER_COLS dimensions
+function migrateGrid(grid: number[][]): number[][] {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  if (rows === TOWER_ROWS && cols === TOWER_COLS) return grid;
+  // Create a fresh grid and copy over the old data
+  const newGrid = createFloorGrid();
+  for (let r = 0; r < Math.min(rows, TOWER_ROWS); r++) {
+    for (let c = 0; c < Math.min(cols, TOWER_COLS); c++) {
+      newGrid[r][c] = grid[r][c];
+    }
+  }
+  return newGrid;
+}
+
 export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
-  const [rooms, setRooms] = useState<RoomData[]>(
-    initialRooms && initialRooms.length > 0
-      ? initialRooms
-      : [
-          { grid: createFloorGrid() },
-          { grid: createFloorGrid() },
-          { grid: createFloorGrid() }
-        ]
-  );
+  const [rooms, setRooms] = useState<RoomData[]>(() => {
+    if (initialRooms && initialRooms.length > 0) {
+      return initialRooms.map(room => ({ grid: migrateGrid(room.grid) }));
+    }
+    return [
+      { grid: createFloorGrid() },
+      { grid: createFloorGrid() },
+      { grid: createFloorGrid() }
+    ];
+  });
   const [currentRoom, setCurrentRoom] = useState(0);
   const [selectedBlock, setSelectedBlock] = useState<BlockType>(BlockType.WALL);
   const [isDragging, setIsDragging] = useState(false);

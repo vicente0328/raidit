@@ -248,7 +248,7 @@ export default function App() {
   }
 
   if (screen === 'play' && currentLevel) {
-    return <GameCanvas level={currentLevel} onWin={handleWin} onLose={handleLose} />;
+    return <GameCanvas level={currentLevel} onWin={handleWin} onLose={handleLose} onQuit={() => { setCurrentLevel(null); setScreen('hero_dash'); }} />;
   }
 
   if (screen === 'result' && gameResult) {
