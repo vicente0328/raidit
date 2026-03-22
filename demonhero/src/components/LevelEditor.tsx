@@ -58,6 +58,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
   const [message, setMessage] = useState<{ text: string, type: 'error' | 'success' } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [drawMode, setDrawMode] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(40);
 
@@ -202,13 +203,15 @@ export function LevelEditor({ onSave, onCancel }: Props) {
         <div
           ref={gridContainerRef}
           className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-2"
-          style={{ touchAction: 'pan-y' }}
         >
           <div
             className="border border-[#3d3630]/50 bg-[#0d0a07]/80"
-            style={{ display: 'grid', gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)`, touchAction: 'none' }}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)`,
+              touchAction: drawMode ? 'none' : 'pan-y',
+            }}
+            {...(drawMode ? { onTouchStart: handleTouchStart, onTouchMove: handleTouchMove } : {})}
           >
             {rooms[currentRoom].grid.map((row, r) =>
               row.map((cell, c) => (
@@ -227,12 +230,25 @@ export function LevelEditor({ onSave, onCancel }: Props) {
 
         {/* Bottom palette */}
         <div className="shrink-0 border-t border-[#3d3630]/50 bg-[#1a1510]" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-          <button onClick={() => setShowPalette(!showPalette)}
-            className="w-full flex items-center justify-center gap-2 py-1.5 text-[#5a4d3e] text-xs font-medieval"
-          >
-            {showPalette ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-            {BLOCK_NAMES[selectedBlock]} 선택됨
-          </button>
+          {/* Draw mode toggle + palette toggle */}
+          <div className="flex items-center px-3 py-1.5 gap-2">
+            <button
+              onClick={() => setDrawMode(!drawMode)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-medieval font-bold text-xs transition-all ${
+                drawMode
+                  ? 'bg-[#7c3aed]/30 border border-[#7c3aed]/60 text-[#a78bfa]'
+                  : 'bg-[#0d0a07]/50 border border-[#3d3630]/30 text-[#5a4d3e]'
+              }`}
+            >
+              {drawMode ? '✏️ 그리기 ON' : '👆 스크롤'}
+            </button>
+            <button onClick={() => setShowPalette(!showPalette)}
+              className="flex-1 flex items-center justify-center gap-2 text-[#5a4d3e] text-xs font-medieval"
+            >
+              {showPalette ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+              {BLOCK_NAMES[selectedBlock]} 선택됨
+            </button>
+          </div>
 
           {showPalette && (
             <div className="grid grid-cols-4 gap-1.5 px-3 pb-2">

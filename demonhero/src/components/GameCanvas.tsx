@@ -279,9 +279,35 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         }
         if (e.hitFlash > 0) e.hitFlash--;
 
+        // Gravity for ground-based enemies (not stationary mage — it floats)
+        if (e.type !== BlockType.MOB_STATIONARY) {
+          e.vy += 0.5;
+          e.y += e.vy;
+          for (const w of walls) {
+            if (checkCol(e, w)) {
+              if (e.vy > 0) {
+                e.y = w.y - e.h;
+                e.vy = 0;
+              } else if (e.vy < 0) {
+                e.y = w.y + w.h;
+                e.vy = 0;
+              }
+            }
+          }
+        }
+
         if (e.type === BlockType.MOB_PATROL) {
           e.x += e.vx;
+          // Reverse at patrol range OR if about to walk off a platform edge
           if (Math.abs(e.x - e.startX) > 80) e.vx *= -1;
+          // Wall collision for horizontal movement
+          for (const w of walls) {
+            if (checkCol(e, w)) {
+              if (e.vx > 0) e.x = w.x - e.w;
+              else if (e.vx < 0) e.x = w.x + w.w;
+              e.vx *= -1;
+            }
+          }
         }
         if (e.type === BlockType.BOSS) {
           e.timer++;
