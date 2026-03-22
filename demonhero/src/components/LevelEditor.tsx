@@ -100,11 +100,16 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
       if (mobile) {
-        const availW = window.innerWidth - 16;
-        setCellSize(Math.floor(availW / GRID_COLS));
+        if (orientation === 'horizontal') {
+          // Horizontal maps: fit rows to screen height, scroll horizontally
+          const availH = window.innerHeight - 160; // reserve space for top bar + palette
+          setCellSize(Math.max(24, Math.floor(availH / GRID_ROWS)));
+        } else {
+          const availW = window.innerWidth - 16;
+          setCellSize(Math.floor(availW / GRID_COLS));
+        }
       } else {
-        // For horizontal maps with many columns, use smaller cells
-        setCellSize(orientation === 'horizontal' ? 24 : 36);
+        setCellSize(36);
       }
     };
     check();
@@ -159,9 +164,12 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
       e.preventDefault();
       const grid = gridContainerRef.current;
       if (!grid) return;
-      const rect = grid.getBoundingClientRect();
+      // Find the inner grid element (the actual grid, not the scroll container)
+      const gridEl = grid.firstElementChild as HTMLElement;
+      if (!gridEl) return;
+      const rect = gridEl.getBoundingClientRect();
       const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top + grid.scrollTop;
+      const y = touch.clientY - rect.top;
       const c = Math.floor(x / cellSize);
       const r = Math.floor(y / cellSize);
       if (r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
@@ -309,13 +317,13 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
         )}
 
         {/* Grid */}
-        <div ref={gridContainerRef} className={`flex-1 ${orientation === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'} flex justify-center py-2`}>
+        <div ref={gridContainerRef} className={`flex-1 overflow-auto ${orientation === 'horizontal' ? '' : 'flex justify-center'} py-2`}>
           <div
             className="border border-[#27272a] bg-[#09090b]"
             style={{
               display: 'grid',
               gridTemplateColumns: `repeat(${GRID_COLS}, ${cellSize}px)`,
-              touchAction: orientation === 'horizontal' ? 'pan-x' : 'pan-y',
+              touchAction: orientation === 'horizontal' ? 'pan-x pan-y' : 'pan-y',
             }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
@@ -487,7 +495,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
         </div>
 
         {/* Grid */}
-        <div className={`flex-1 ${orientation === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'} py-4 z-10 custom-scrollbar`}>
+        <div className={`flex-1 ${orientation === 'horizontal' ? 'overflow-x-auto overflow-y-auto' : 'overflow-y-auto overflow-x-hidden'} py-4 z-10 custom-scrollbar`}>
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.15 }}
             className="border border-[#27272a] bg-[#09090b] rounded-md overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.4)]"
