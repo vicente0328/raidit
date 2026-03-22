@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isValidStringLength(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'photoURL', 'email', 'fame', 'infamy', 'createdAt']) &&
+             isValidStringLength(data.uid, 1, 100) &&
+             isValidStringLength(data.displayName, 1, 50) &&
+             data.photoURL is string &&
+             data.email is string &&
+             data.fame is number && data.fame >= 0 &&
+             data.infamy is number && data.infamy >= 0 &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidLevel(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'creatorId', 'creatorName', 'infamy', 'clears', 'attempts', 'rooms', 'createdAt']) &&
+             isValidStringLength(data.id, 1, 100) &&
+             isValidStringLength(data.name, 1, 100) &&
+             isValidStringLength(data.creatorId, 1, 100) &&
+             isValidStringLength(data.creatorName, 1, 50) &&
+             data.infamy is number && data.infamy >= 0 &&
+             data.clears is number && data.clears >= 0 &&
+             data.attempts is number && data.attempts >= 0 &&
+             data.rooms is string && data.rooms.size() <= 1000000 && // 1MB limit
+             isValidDateString(data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Anyone can read user profiles (for leaderboards, etc.)
+      allow read: if true;
+      
+      // Users can create their own profile
+      allow create: if isOwner(userId) && 
+                    isValidUser(request.resource.data) &&
+                    request.resource.data.uid == userId;
+                    
+      // Users can update their own profile.
+      // We also allow other authenticated users to update ONLY fame/infamy (when playing levels)
+      allow update: if isAuthenticated() && 
+                    isValidUser(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['uid', 'createdAt', 'email']) &&
+                    (
+                      isOwner(userId) || 
+                      (
+                        // If not owner, can only change fame/infamy
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fame', 'infamy'])
+                      )
+                    );
+    }
+
+    match /levels/{levelId} {
+      // Anyone can read levels to play them
+      allow read: if true;
+      
+      // Authenticated users can create levels
+      allow create: if isAuthenticated() && 
+                    isValidLevel(request.resource.data) &&
+                    request.resource.data.creatorId == request.auth.uid;
+                    
+      // Authenticated users can update levels (to increment clears/attempts or update infamy)
+      allow update: if isAuthenticated() && 
+                    isValidLevel(request.resource.data) &&
+                    areImmutableFieldsUnchanged(['id', 'creatorId', 'creatorName', 'rooms', 'createdAt']) &&
+                    (
+                      // Owner can update name and infamy
+                      (request.auth.uid == resource.data.creatorId) ||
+                      // Non-owners can only update clears, attempts, and infamy
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clears', 'attempts', 'infamy'])
+                    );
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile storing hero and demon stats.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's unique ID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "The user's profile picture URL."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address."
+        },
+        "fame": {
+          "type": "number",
+          "description": "The user's fame score as a hero."
+        },
+        "infamy": {
+          "type": "number",
+          "description": "The user's infamy score as a demon."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was created."
+        }
+      },
+      "required": ["uid", "displayName", "fame", "infamy", "createdAt"]
+    },
+    "Level": {
+      "title": "Level",
+      "description": "A user-created level (Demon King's Castle).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The level's unique ID."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the level."
+        },
+        "creatorId": {
+          "type": "string",
+          "description": "The UID of the user who created the level."
+        },
+        "creatorName": {
+          "type": "string",
+          "description": "The display name of the creator."
+        },
+        "infamy": {
+          "type": "number",
+          "description": "The infamy reward/cost of the level."
+        },
+        "clears": {
+          "type": "number",
+          "description": "Number of times the level was cleared."
+        },
+        "attempts": {
+          "type": "number",
+          "description": "Number of times the level was attempted."
+        },
+        "rooms": {
+          "type": "string",
+          "description": "JSON stringified array of RoomData."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the level was created."
+        }
+      },
+      "required": ["id", "name", "creatorId", "creatorName", "infamy", "clears", "attempts", "rooms", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profiles."
+    },
+    "/levels/{levelId}": {
+      "schema": {
+        "$ref": "#/entities/Level"
+      },
+      "description": "Stores user-created levels."
+    }
+  }
+}
