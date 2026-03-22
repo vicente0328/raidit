@@ -14,6 +14,7 @@ import doorImg from './assets/sprites/door.png';
 import floorImg from './assets/sprites/floor.png';
 import spawnImg from './assets/sprites/spawn.png';
 import platformImg from './assets/sprites/platform.png';
+import potionImg from './assets/sprites/potion.png';
 
 function loadImage(src: string): HTMLImageElement {
   const img = new Image();
@@ -38,6 +39,7 @@ export const SPRITES = {
   floor: loadImage(floorImg),
   spawn: loadImage(spawnImg),
   platform: loadImage(platformImg),
+  potion: loadImage(potionImg),
 };
 
 // Animation frame sets for cycling
@@ -72,4 +74,5 @@ export const SPRITE_URLS = {
   floor: floorImg,
   spawn: spawnImg,
   platform: platformImg,
+  potion: potionImg,
 };

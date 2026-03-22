@@ -16,6 +16,7 @@ const BLOCK_IMAGES: Record<number, string> = {
   [BlockType.DOOR]: SPRITE_URLS.door,
   [BlockType.SPAWN]: SPRITE_URLS.spawn,
   [BlockType.PLATFORM]: SPRITE_URLS.platform,
+  [BlockType.POTION]: SPRITE_URLS.potion,
 };
 
 const BLOCK_NAMES: Record<number, string> = {
@@ -28,6 +29,7 @@ const BLOCK_NAMES: Record<number, string> = {
   [BlockType.BOSS]: '마왕',
   [BlockType.DOOR]: '문',
   [BlockType.SPAWN]: '소환진',
+  [BlockType.POTION]: '물약',
 };
 
 const BLOCK_NAMES_FULL: Record<number, string> = {
@@ -40,6 +42,7 @@ const BLOCK_NAMES_FULL: Record<number, string> = {
   [BlockType.BOSS]: '마왕 (약점형)',
   [BlockType.DOOR]: '고대의 문',
   [BlockType.SPAWN]: '소환진',
+  [BlockType.POTION]: '회복 물약 (HP +30)',
 };
 
 interface Props {

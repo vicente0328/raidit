@@ -89,11 +89,12 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
     // Player — collision box is tight body (1 tile wide, ~1.5 tiles tall), sprite renders at 2 tiles
     const PLAYER_DRAW_W = 2 * T;
     const PLAYER_DRAW_H = 2 * T + 16;
+    const MAX_HP = 100;
     let player = {
       x: 3 * T, y: (TOWER_ROWS - 3) * T - (T + T / 2),
       w: T - 8, h: T + T / 2, // collision: narrow body (40px wide, 72px tall) — no sword/arm overlap
       vx: 0, vy: 0,
-      hp: 5,
+      hp: MAX_HP,
       isGrounded: false,
       facingRight: true,
       attackTimer: 0,
@@ -103,6 +104,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
     let walls: { x: number; y: number; w: number; h: number }[] = [];
     let platforms: { x: number; y: number; w: number; h: number }[] = []; // one-way platforms
     let spikes: { x: number; y: number; w: number; h: number }[] = [];
+    let potions: { x: number; y: number; w: number; h: number }[] = [];
     let enemies: any[] = [];
     let projectiles: { x: number; y: number; vx: number; vy: number; w: number; h: number; life: number }[] = [];
     let door: { x: number; y: number; w: number; h: number } | null = null;
@@ -111,6 +113,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       walls = [];
       platforms = [];
       spikes = [];
+      potions = [];
       enemies = [];
       projectiles = [];
       door = null;
@@ -140,6 +143,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
             type: val, hp: 10, maxHp: 10, vx: 0, vy: 0, timer: 0, weak: false, hitFlash: 0,
             homeX: x - T, homeY: y - 2 * T
           });
+          if (val === BlockType.POTION) potions.push({ x, y, w: T, h: T });
           if (val === BlockType.DOOR) door = { x, y, w: T, h: T };
           if (val === BlockType.SPAWN) {
             player.x = x + (T - player.w) / 2;
@@ -304,7 +308,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
 
       // Fall off bottom = damage + respawn at last ground
       if (player.y > worldH + 50) {
-        player.hp -= 1;
+        player.hp -= 25;
         player.invulnTimer = 60;
         // Respawn at bottom of current room
         const grid = level.rooms[currentRoomIdx].grid;
@@ -540,7 +544,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         for (const e of enemies) if (checkCol(hurtBox, e)) hit = true;
         for (const p of projectiles) if (checkCol(hurtBox, p)) hit = true;
         if (hit) {
-          player.hp -= 1;
+          player.hp -= 20;
           player.invulnTimer = 60;
           player.vy = -8;
           player.vx = player.facingRight ? -5 : 5;
@@ -552,6 +556,19 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         }
       }
       if (player.invulnTimer > 0) player.invulnTimer--;
+
+      // Potion pickup
+      for (let i = potions.length - 1; i >= 0; i--) {
+        if (checkCol(player, potions[i])) {
+          const healAmt = 30;
+          player.hp = Math.min(MAX_HP, player.hp + healAmt);
+          const pt = potions[i];
+          for (let j = 0; j < 8; j++) spawnEmber(pt.x + pt.w / 2, pt.y + pt.h / 2, '#4ade80');
+          spawnHitSparks(pt.x + pt.w / 2, pt.y + pt.h / 2, 6);
+          potions.splice(i, 1);
+          tryVibrate(15);
+        }
+      }
 
       // Door — next floor
       if (door && checkCol(player, door)) {
@@ -609,7 +626,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       for (let r = startRow; r < endRow; r++) {
         for (let c = 0; c < cols; c++) {
           const val = grid[r][c];
-          if (val === BlockType.EMPTY || val === BlockType.MOB_PATROL || val === BlockType.MOB_STATIONARY || val === BlockType.BOSS || val === BlockType.SPAWN || val === BlockType.PLATFORM) {
+          if (val === BlockType.EMPTY || val === BlockType.MOB_PATROL || val === BlockType.MOB_STATIONARY || val === BlockType.BOSS || val === BlockType.SPAWN || val === BlockType.PLATFORM || val === BlockType.POTION) {
             ctx.globalAlpha = 0.15;
             ctx.drawImage(SPRITES.floor, c * T, r * T, T, T);
             ctx.globalAlpha = 1;
@@ -655,6 +672,17 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       for (const s of spikes) {
         if (s.y + s.h < cameraY - 10 || s.y > cameraY + GAME_H + 10) continue;
         ctx.drawImage(SPRITES.spike, s.x, s.y, s.w, s.h);
+      }
+
+      // Potions — floating with glow
+      for (const pt of potions) {
+        if (pt.y + pt.h < cameraY - 10 || pt.y > cameraY + GAME_H + 10) continue;
+        const floatY = Math.sin(frameCount * 0.05 + pt.x) * 3;
+        ctx.save();
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#4ade80';
+        ctx.drawImage(SPRITES.potion, pt.x, pt.y + floatY, pt.w, pt.h);
+        ctx.restore();
       }
 
       // Enemies
@@ -918,22 +946,32 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       ctx.shadowBlur = 0;
       ctx.textAlign = 'start';
 
-      // HP hearts
+      // HP gauge bar
+      const hpBarX = 16;
+      const hpBarY = 24;
+      const hpBarW = 120;
+      const hpBarH = 10;
+      const hpRatio = Math.max(0, player.hp / MAX_HP);
+      // Background
+      ctx.fillStyle = '#1a1510';
+      ctx.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
+      // HP fill — color shifts from green to yellow to red
+      const hpColor = hpRatio > 0.5 ? '#4ade80' : hpRatio > 0.25 ? '#facc15' : '#ef4444';
+      ctx.fillStyle = hpColor;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = hpColor;
+      ctx.fillRect(hpBarX, hpBarY, hpBarW * hpRatio, hpBarH);
       ctx.shadowBlur = 0;
-      for (let i = 0; i < 5; i++) {
-        const hx = 16 + i * 30;
-        if (i < player.hp) {
-          ctx.fillStyle = '#cc2200';
-          ctx.shadowBlur = 8;
-          ctx.shadowColor = '#cc2200';
-        } else {
-          ctx.fillStyle = '#3d3630';
-          ctx.shadowBlur = 0;
-        }
-        ctx.font = '22px serif';
-        ctx.fillText('\u2665', hx, 36);
-      }
-      ctx.shadowBlur = 0;
+      // Border
+      ctx.strokeStyle = '#5a4d3e';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(hpBarX, hpBarY, hpBarW, hpBarH);
+      // HP text
+      ctx.fillStyle = '#e8dcc8';
+      ctx.font = 'bold 9px "Cinzel", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${Math.ceil(player.hp)} / ${MAX_HP}`, hpBarX + 2, hpBarY + 9);
+      ctx.textAlign = 'start';
 
       // Height indicator bar (right side)
       const barX = GAME_W - 10;
@@ -1029,10 +1067,10 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       )}
 
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end px-4 z-50 pointer-events-none select-none"
+        <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end pl-2 pr-4 z-50 pointer-events-none select-none"
           style={{ paddingBottom: 'max(28px, calc(env(safe-area-inset-bottom) + 16px))' }}
         >
-          <div className="flex gap-3 items-end pointer-events-auto">
+          <div className="flex gap-1 items-end pointer-events-auto">
             <button
               className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = true; }}

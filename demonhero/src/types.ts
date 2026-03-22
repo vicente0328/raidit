@@ -10,6 +10,7 @@ export enum BlockType {
   DOOR = 6,
   SPAWN = 7,
   PLATFORM = 8,
+  POTION = 9,
 }
 
 export interface RoomData {
