@@ -68,6 +68,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     let frameCount = 0;
     let cameraY = 0; // vertical camera offset (world coords)
 
+    let transitionTimer = 0;
     let embers: Ember[] = [];
     let slashTrails: { x: number; y: number; angle: number; life: number; size: number }[] = [];
 
@@ -337,6 +338,8 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         if (currentRoomIdx < level.rooms.length - 1) {
           currentRoomIdx++;
           loadRoom(currentRoomIdx);
+          transitionTimer = 40;
+          cameraY = worldH - GAME_H; // start camera at bottom
         } else {
           onWin();
           return;
@@ -629,6 +632,14 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         const doorDotY = barTop + barH * (1 - doorProgress);
         ctx.fillStyle = '#d4a017';
         ctx.fillRect(barX - 2, doorDotY - 2, 10, 4);
+      }
+
+      // Floor transition overlay
+      if (transitionTimer > 0) {
+        transitionTimer--;
+        const alpha = transitionTimer / 40;
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+        ctx.fillRect(0, 0, GAME_W, GAME_H);
       }
 
       animationFrameId = requestAnimationFrame(update);

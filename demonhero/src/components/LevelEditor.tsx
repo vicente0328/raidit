@@ -42,14 +42,100 @@ const BLOCK_NAMES_FULL: Record<number, string> = {
 interface Props {
   onSave: (rooms: RoomData[]) => Promise<void> | void;
   onCancel: () => void;
+  initialRooms?: RoomData[];
 }
 
-export function LevelEditor({ onSave, onCancel }: Props) {
-  const [rooms, setRooms] = useState<RoomData[]>([
-    { grid: createFloorGrid() },
-    { grid: createFloorGrid() },
-    { grid: createFloorGrid() }
-  ]);
+function checkReachability(rooms: RoomData[]): string | null {
+  const isWall = (grid: number[][], r: number, c: number) =>
+    r < 0 || r >= TOWER_ROWS || c < 0 || c >= TOWER_COLS || grid[r][c] === BlockType.WALL;
+
+  const isOpen = (grid: number[][], r: number, c: number) =>
+    r >= 0 && r < TOWER_ROWS && c >= 0 && c < TOWER_COLS && grid[r][c] !== BlockType.WALL;
+
+  for (let fi = 0; fi < rooms.length; fi++) {
+    const grid = rooms[fi].grid;
+    let spawn: [number, number] | null = null;
+    let door: [number, number] | null = null;
+
+    for (let r = 0; r < TOWER_ROWS; r++) {
+      for (let c = 0; c < TOWER_COLS; c++) {
+        if (grid[r][c] === BlockType.SPAWN) spawn = [r, c];
+        if (grid[r][c] === BlockType.DOOR) door = [r, c];
+      }
+    }
+
+    if (!spawn) return `${fi + 1}F: Spawn point missing`;
+    if (!door) return `${fi + 1}F: Door missing`;
+
+    // BFS reachability
+    const visited = new Set<string>();
+    const queue: [number, number][] = [spawn];
+    visited.add(`${spawn[0]},${spawn[1]}`);
+
+    while (queue.length > 0) {
+      const [cr, cc] = queue.shift()!;
+
+      // Check all reachable tiles from this position
+      for (let dr = -3; dr <= 10; dr++) {
+        for (let dc = -5; dc <= 5; dc++) {
+          const nr = cr + dr;
+          const nc = cc + dc;
+          const key = `${nr},${nc}`;
+
+          if (visited.has(key)) continue;
+          if (nr < 0 || nr >= TOWER_ROWS || nc < 0 || nc >= TOWER_COLS) continue;
+          if (isWall(grid, nr, nc)) continue;
+
+          // Target must be standable (has ground below) or be the door
+          const hasGround = nr === TOWER_ROWS - 1 || isWall(grid, nr + 1, nc);
+          const isDoor = grid[nr][nc] === BlockType.DOOR;
+          if (!hasGround && !isDoor) continue;
+
+          // Going up: need jump. Max 3 tiles up, horizontal range decreases with height
+          if (dr < 0) {
+            const maxHorizontal = Math.max(0, 5 - Math.abs(dr));
+            if (Math.abs(dc) > maxHorizontal) continue;
+          }
+
+          // Check no wall in direct path (simplified)
+          let blocked = false;
+          const minR = Math.min(cr, nr);
+          const maxR = Math.max(cr, nr);
+          for (let checkR = minR; checkR <= maxR; checkR++) {
+            if (isWall(grid, checkR, cc) && checkR !== cr) { blocked = true; break; }
+            if (isWall(grid, checkR, nc) && checkR !== nr) { blocked = true; break; }
+          }
+          if (blocked) continue;
+
+          visited.add(key);
+          queue.push([nr, nc]);
+        }
+      }
+    }
+
+    // Check if door is reachable
+    const doorKey = `${door[0]},${door[1]}`;
+    if (!visited.has(doorKey)) {
+      const belowDoorKey = `${door[0] + 1},${door[1]}`;
+      if (!visited.has(belowDoorKey) && !visited.has(doorKey)) {
+        return `${fi + 1}F: Door is unreachable from spawn! Check that platforms allow the hero to jump up (max 3 tiles up, 5 tiles horizontal).`;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
+  const [rooms, setRooms] = useState<RoomData[]>(
+    initialRooms && initialRooms.length > 0
+      ? initialRooms
+      : [
+          { grid: createFloorGrid() },
+          { grid: createFloorGrid() },
+          { grid: createFloorGrid() }
+        ]
+  );
   const [currentRoom, setCurrentRoom] = useState(0);
   const [selectedBlock, setSelectedBlock] = useState<BlockType>(BlockType.WALL);
   const [isDragging, setIsDragging] = useState(false);
@@ -140,7 +226,20 @@ export function LevelEditor({ onSave, onCancel }: Props) {
   };
 
   const handleTestPlay = () => {
-    if (validateLevel()) setIsTesting(true);
+    if (!validateLevel()) return;
+    const reachError = checkReachability(rooms);
+    if (reachError) {
+      setMessage({ text: reachError, type: 'error' });
+      return;
+    }
+    setIsTesting(true);
+  };
+
+  const handleAddFloor = () => {
+    setRooms(prev => [...prev, { grid: createFloorGrid() }]);
+    setCurrentRoom(rooms.length); // switch to the new floor
+    setHasClearedTest(false);
+    setMessage(null);
   };
 
   if (isTesting) {
@@ -170,14 +269,17 @@ export function LevelEditor({ onSave, onCancel }: Props) {
       >
         {/* Top bar */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-[#27272a] bg-[#111114] shrink-0">
-          <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
+          <div className="flex gap-1 overflow-x-auto">
+            {rooms.map((_, i) => (
               <button key={i} onClick={() => setCurrentRoom(i)}
                 className={`px-3 py-1.5 rounded-md font-semibold text-xs tracking-wider transition-all ${
                   currentRoom === i ? 'bg-[#c084fc]/10 border border-[#c084fc]/25 text-[#c084fc]' : 'text-[#52525b]'
                 }`}
               >{i + 1}F</button>
             ))}
+            <button onClick={handleAddFloor}
+              className="px-2 py-1.5 rounded-md font-semibold text-xs text-[#4ade80] hover:bg-[#4ade80]/10 transition-all"
+            >+</button>
           </div>
           <div className="flex gap-1.5">
             <button onClick={handleTestPlay} className="btn-surface text-[#22d3ee] px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1">
@@ -332,13 +434,16 @@ export function LevelEditor({ onSave, onCancel }: Props) {
 
         {/* Floor tabs */}
         <div className="mt-4 flex gap-1 bg-[#111114] border border-[#27272a] p-1 rounded-lg z-10 shrink-0">
-          {[0, 1, 2].map(i => (
+          {rooms.map((_, i) => (
             <button key={i} onClick={() => setCurrentRoom(i)}
               className={`px-5 py-2 rounded-md font-semibold text-sm tracking-wider transition-all duration-150 ${
                 currentRoom === i ? 'bg-[#c084fc]/10 border border-[#c084fc]/25 text-[#c084fc]' : 'bg-transparent text-[#52525b] hover:text-[#71717a]'
               }`}
             >{i + 1}F</button>
           ))}
+          <button onClick={handleAddFloor}
+            className="px-4 py-2 rounded-md font-semibold text-sm text-[#4ade80] hover:bg-[#4ade80]/10 transition-all duration-150"
+          >+</button>
         </div>
 
         {/* Grid */}

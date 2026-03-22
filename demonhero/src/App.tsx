@@ -56,6 +56,7 @@ export default function App() {
   const [stats, setStats] = useState<PlayerStats>({ fame: 100, infamy: 100 });
   const [levels, setLevels] = useState<LevelData[]>([DEFAULT_LEVEL]);
   const [currentLevel, setCurrentLevel] = useState<LevelData | null>(null);
+  const [editingLevel, setEditingLevel] = useState<LevelData | null>(null);
   const [gameResult, setGameResult] = useState<{ win: boolean, fameChange: number } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -175,25 +176,34 @@ export default function App() {
   const handleSaveLevel = async (rooms: RoomData[]) => {
     if (!user) throw new Error('Not authenticated');
 
-    const levelId = `level-${Date.now()}`;
-    const newLevel = {
-      id: levelId,
-      name: `나의 마왕탑 ${levels.filter(l => l.creator === user.displayName).length + 1}`,
-      creatorId: user.uid,
-      creatorName: user.displayName || '이름 없는 마왕',
-      infamy: 100,
-      clears: 0,
-      attempts: 0,
-      rooms: JSON.stringify(rooms),
-      createdAt: new Date().toISOString()
-    };
+    const levelId = `tower-${user.uid}`;
+    const levelRef = doc(db, 'levels', levelId);
 
     try {
-      await setDoc(doc(db, 'levels', levelId), newLevel);
+      const existingDoc = await getDoc(levelRef);
+      if (existingDoc.exists()) {
+        // Update existing tower
+        await updateDoc(levelRef, { rooms: JSON.stringify(rooms) });
+      } else {
+        // Create new tower
+        const newLevel = {
+          id: levelId,
+          name: `나의 마왕탑`,
+          creatorId: user.uid,
+          creatorName: user.displayName || '이름 없는 마왕',
+          infamy: 100,
+          clears: 0,
+          attempts: 0,
+          rooms: JSON.stringify(rooms),
+          createdAt: new Date().toISOString()
+        };
+        await setDoc(levelRef, newLevel);
+      }
+      setEditingLevel(null);
       setScreen('demon_dash');
     } catch (error) {
       console.error('Save level failed:', error);
-      throw error; // propagate to LevelEditor for visible feedback
+      throw error;
     }
   };
 
@@ -215,11 +225,11 @@ export default function App() {
   }
 
   if (screen === 'demon_dash') {
-    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} onEdit={() => setScreen('edit')} onBack={() => setScreen('home')} />;
+    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} onEdit={(existing) => { setEditingLevel(existing); setScreen('edit'); }} onBack={() => setScreen('home')} />;
   }
 
   if (screen === 'edit') {
-    return <LevelEditor onSave={handleSaveLevel} onCancel={() => setScreen('demon_dash')} />;
+    return <LevelEditor onSave={handleSaveLevel} onCancel={() => { setEditingLevel(null); setScreen('demon_dash'); }} initialRooms={editingLevel?.rooms} />;
   }
 
   if (screen === 'play' && currentLevel) {
