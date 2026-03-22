@@ -103,6 +103,10 @@ service cloud.firestore {
                       // Non-owners can only update clears, attempts, and infamy
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clears', 'attempts', 'infamy'])
                     );
+
+      // Only the creator can delete their own level
+      allow delete: if isAuthenticated() &&
+                    request.auth.uid == resource.data.creatorId;
     }
   }
 }

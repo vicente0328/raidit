@@ -8,7 +8,7 @@ import { GameCanvas } from './components/GameCanvas';
 import { createFloorGrid } from './utils';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc, increment, query, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc, deleteDoc, increment, query, orderBy } from 'firebase/firestore';
 import { rollReward, getItem, RARITY_COLORS } from './items';
 
 const DEFAULT_EQUIPMENT: Equipment = { weapon: null, armor: null, boots: null };
@@ -262,18 +262,35 @@ export default function App() {
     await saveInventoryToFirestore(newInventory);
   };
 
+  const MAX_TOWERS_PER_USER = 3;
+
   const handleSaveLevel = async (rooms: RoomData[]) => {
     if (!user) throw new Error('Not authenticated');
-    const levelId = `tower-${user.uid}`;
-    const levelRef = doc(db, 'levels', levelId);
-    try {
-      const existingDoc = await getDoc(levelRef);
-      if (existingDoc.exists()) {
+
+    if (editingLevel) {
+      // Update existing tower
+      const levelRef = doc(db, 'levels', editingLevel.id);
+      try {
         await updateDoc(levelRef, { rooms: JSON.stringify(rooms) });
-      } else {
+        setEditingLevel(null);
+        setScreen('demon_dash');
+      } catch (error) {
+        console.error('Save level failed:', error);
+        throw error;
+      }
+    } else {
+      // Create new tower — check limit
+      const myTowers = levels.filter(l => l.creatorId === user.uid);
+      if (myTowers.length >= MAX_TOWERS_PER_USER) {
+        throw new Error('최대 3개의 탑만 만들 수 있습니다.');
+      }
+      const levelId = `tower-${user.uid}-${Date.now()}`;
+      const towerNum = myTowers.length + 1;
+      const levelRef = doc(db, 'levels', levelId);
+      try {
         const newLevel = {
           id: levelId,
-          name: `나의 마왕탑`,
+          name: `나의 마왕탑 #${towerNum}`,
           creatorId: user.uid,
           creatorName: user.displayName || '이름 없는 마왕',
           infamy: 100,
@@ -283,12 +300,21 @@ export default function App() {
           createdAt: new Date().toISOString()
         };
         await setDoc(levelRef, newLevel);
+        setEditingLevel(null);
+        setScreen('demon_dash');
+      } catch (error) {
+        console.error('Save level failed:', error);
+        throw error;
       }
-      setEditingLevel(null);
-      setScreen('demon_dash');
+    }
+  };
+
+  const handleDeleteLevel = async (levelId: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'levels', levelId));
     } catch (error) {
-      console.error('Save level failed:', error);
-      throw error;
+      handleFirestoreError(error, OperationType.UPDATE, 'levels');
     }
   };
 
@@ -319,14 +345,14 @@ export default function App() {
     );
   }
 
-  const handleRenameTower = async (newName: string) => {
+  const handleRenameTower = async (levelId: string, newName: string) => {
     if (!user) return;
-    const levelRef = doc(db, 'levels', `tower-${user.uid}`);
+    const levelRef = doc(db, 'levels', levelId);
     await updateDoc(levelRef, { name: newName });
   };
 
   if (screen === 'demon_dash') {
-    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} onEdit={(existing) => { setEditingLevel(existing); setScreen('edit'); }} onRenameTower={handleRenameTower} onBack={() => setScreen('home')} />;
+    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} maxTowers={MAX_TOWERS_PER_USER} onEdit={(existing) => { setEditingLevel(existing); setScreen('edit'); }} onRenameTower={handleRenameTower} onDeleteTower={handleDeleteLevel} onBack={() => setScreen('home')} />;
   }
 
   if (screen === 'edit') {

@@ -151,14 +151,6 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       const rows = grid.length;
       const cols = grid[0]?.length ?? 0;
       // Debug: count non-empty cells
-      const counts: Record<number, number> = {};
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const v = grid[r][c];
-          if (v !== 0) counts[v] = (counts[v] || 0) + 1;
-        }
-      }
-      console.log(`[loadRoom ${idx}] grid ${rows}x${cols}, blocks:`, counts);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const val = grid[r][c];
@@ -192,7 +184,6 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     };
 
     loadRoom(0);
-    console.log(`[GameCanvas init] walls:${walls.length} platforms:${platforms.length} spikes:${spikes.length} potions:${potions.length} enemies:${enemies.length} door:${!!door}`);
 
     const keys = keysRef.current;
 
@@ -411,6 +402,13 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
                 e.hp -= ATK_DAMAGE;
                 e.hitFlash = 8;
                 e.x += knockDir * 8;
+                // Resolve horizontal wall collision after knockback
+                for (const w of walls) {
+                  if (checkCol(e, w)) {
+                    if (knockDir > 0) e.x = w.x - e.w;
+                    else e.x = w.x + w.w;
+                  }
+                }
                 e.vy = -3;
                 spawnHitSparks(hitX, hitY, 10);
                 for (let i = 0; i < 8; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
@@ -420,6 +418,13 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
               e.hp -= ATK_DAMAGE;
               e.hitFlash = 8;
               e.x += knockDir * 20;
+              // Resolve horizontal wall collision after knockback
+              for (const w of walls) {
+                if (checkCol(e, w)) {
+                  if (knockDir > 0) e.x = w.x - e.w;
+                  else e.x = w.x + w.w;
+                }
+              }
               e.vy = -4;
               spawnHitSparks(hitX, hitY, 8);
               for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
@@ -615,7 +620,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       }
       if (player.invulnTimer > 0) player.invulnTimer--;
 
-      // Potion pickup → goes to inventory
+      // Potion pickup → instant HP heal
       for (let i = potions.length - 1; i >= 0; i--) {
         if (checkCol(player, potions[i])) {
           const pt = potions[i];
@@ -623,17 +628,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           spawnHitSparks(pt.x + pt.w / 2, pt.y + pt.h / 2, 6);
           potions.splice(i, 1);
           tryVibrate(15);
-          // Add to picked up items
-          const existing = pickedUpItemsRef.current.find(it => it.itemId === 'hp_potion_s');
-          if (existing) existing.quantity++;
-          else pickedUpItemsRef.current.push({ itemId: 'hp_potion_s', quantity: 1 });
-          // Update in-game inventory for UI
-          setInGameInventory(prev => {
-            const copy = prev.map(i => ({ ...i }));
-            const ex = copy.find(i => i.itemId === 'hp_potion_s');
-            if (ex) { ex.quantity++; return copy; }
-            return [...copy, { itemId: 'hp_potion_s', quantity: 1 }];
-          });
+          // Heal HP instantly (30 HP per potion)
+          player.hp = Math.min(player.hp + 30, MAX_HP);
         }
       }
 
@@ -1172,7 +1168,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             style={{ left: '4px', bottom: 'max(8px, calc(env(safe-area-inset-bottom) + 4px))' }}
             onTouchStart={(e) => {
               e.preventDefault();
-              const touch = e.touches[0];
+              const touch = e.changedTouches[0];
               const rect = e.currentTarget.getBoundingClientRect();
               const mid = rect.left + rect.width / 2;
               keysRef.current.ArrowLeft = touch.clientX < mid;
@@ -1180,16 +1176,45 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             }}
             onTouchMove={(e) => {
               e.preventDefault();
-              const touch = e.touches[0];
               const rect = e.currentTarget.getBoundingClientRect();
               const mid = rect.left + rect.width / 2;
-              keysRef.current.ArrowLeft = touch.clientX < mid;
-              keysRef.current.ArrowRight = touch.clientX >= mid;
+              // Find touch within this element's bounds
+              let found = false;
+              for (let i = 0; i < e.touches.length; i++) {
+                const t = e.touches[i];
+                if (t.clientX >= rect.left && t.clientX <= rect.right &&
+                    t.clientY >= rect.top && t.clientY <= rect.bottom) {
+                  keysRef.current.ArrowLeft = t.clientX < mid;
+                  keysRef.current.ArrowRight = t.clientX >= mid;
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                keysRef.current.ArrowLeft = false;
+                keysRef.current.ArrowRight = false;
+              }
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
-              keysRef.current.ArrowLeft = false;
-              keysRef.current.ArrowRight = false;
+              // Check if any remaining touch is still in this element
+              const rect = e.currentTarget.getBoundingClientRect();
+              let stillTouching = false;
+              for (let i = 0; i < e.touches.length; i++) {
+                const t = e.touches[i];
+                if (t.clientX >= rect.left && t.clientX <= rect.right &&
+                    t.clientY >= rect.top && t.clientY <= rect.bottom) {
+                  const mid = rect.left + rect.width / 2;
+                  keysRef.current.ArrowLeft = t.clientX < mid;
+                  keysRef.current.ArrowRight = t.clientX >= mid;
+                  stillTouching = true;
+                  break;
+                }
+              }
+              if (!stillTouching) {
+                keysRef.current.ArrowLeft = false;
+                keysRef.current.ArrowRight = false;
+              }
             }}
             onTouchCancel={() => {
               keysRef.current.ArrowLeft = false;

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BlockType, RoomData } from '../types';
 import { createFloorGrid, TOWER_COLS, TOWER_ROWS } from '../utils';
-import { Save, X, Layers, Play, ChevronUp, ChevronDown } from 'lucide-react';
+import { Save, X, Layers, Play, ChevronUp, ChevronDown, Wand2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { SPRITE_URLS } from '../sprites';
 import { GameCanvas } from './GameCanvas';
+import { generateRoom, Difficulty } from '../roomGenerator';
 
 const BLOCK_IMAGES: Record<number, string> = {
   [BlockType.EMPTY]: '',
@@ -182,6 +183,19 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
   };
 
   const [saving, setSaving] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+
+  const handleAiGenerate = (diff: Difficulty) => {
+    const newGrid = generateRoom(diff);
+    setRooms(prev => {
+      const copy = [...prev];
+      copy[currentRoom] = { grid: newGrid };
+      return copy;
+    });
+    setHasClearedTest(false);
+    setShowAiPanel(false);
+    setMessage({ text: `AI가 ${diff === 'easy' ? '쉬운' : diff === 'normal' ? '보통' : '어려운'} 난이도 방을 생성했습니다!`, type: 'success' });
+  };
 
   const handleSave = async () => {
     if (!hasClearedTest) { setMessage({ text: '테스트 플레이를 클리어해야 저장할 수 있습니다.', type: 'error' }); return; }
@@ -249,6 +263,9 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
             >+</button>
           </div>
           <div className="flex gap-1.5">
+            <button onClick={() => setShowAiPanel(!showAiPanel)} className="btn-surface text-[#c084fc] px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1">
+              <Wand2 className="w-3.5 h-3.5" /> AI
+            </button>
             <button onClick={handleTestPlay} className="btn-surface text-[#22d3ee] px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1">
               <Play className="w-3.5 h-3.5" /> Test
             </button>
@@ -258,6 +275,27 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
             <button onClick={onCancel} className="btn-surface text-[#71717a] px-2 py-1.5 rounded-md"><X className="w-4 h-4" /></button>
           </div>
         </div>
+
+        {showAiPanel && (
+          <div className="mx-3 mt-2 p-3 rounded-lg bg-[#18181b] border border-[#c084fc]/20">
+            <p className="text-[10px] text-[#c084fc] uppercase tracking-[0.2em] mb-2 font-semibold">AI 자동 생성 — {currentRoom + 1}F</p>
+            <div className="flex gap-2">
+              <button onClick={() => handleAiGenerate('easy')}
+                className="flex-1 py-2 rounded-md bg-[#4ade80]/[0.08] border border-[#4ade80]/20 text-[#4ade80] text-xs font-semibold hover:bg-[#4ade80]/[0.15] transition-all">
+                쉬움
+              </button>
+              <button onClick={() => handleAiGenerate('normal')}
+                className="flex-1 py-2 rounded-md bg-[#facc15]/[0.08] border border-[#facc15]/20 text-[#facc15] text-xs font-semibold hover:bg-[#facc15]/[0.15] transition-all">
+                보통
+              </button>
+              <button onClick={() => handleAiGenerate('hard')}
+                className="flex-1 py-2 rounded-md bg-[#f87171]/[0.08] border border-[#f87171]/20 text-[#f87171] text-xs font-semibold hover:bg-[#f87171]/[0.15] transition-all">
+                어려움
+              </button>
+            </div>
+            <p className="text-[9px] text-[#52525b] mt-1.5 text-center">현재 방을 AI가 새로 생성합니다. 생성 후 수동 편집 가능!</p>
+          </div>
+        )}
 
         {message && (
           <div className={`mx-3 mt-2 p-2 rounded-md text-xs font-semibold text-center ${
@@ -382,6 +420,35 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
               message.type === 'error' ? 'bg-[#f87171]/[0.08] text-[#f87171] border border-[#f87171]/20' : 'bg-[#4ade80]/[0.08] text-[#4ade80] border border-[#4ade80]/20'
             }`}>{message.text}</div>
           )}
+
+          {/* AI Generate */}
+          <button onClick={() => setShowAiPanel(!showAiPanel)}
+            className={`w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              showAiPanel ? 'bg-[#c084fc]/[0.15] border border-[#c084fc]/30 text-[#c084fc]' : 'bg-[#c084fc]/[0.08] hover:bg-[#c084fc]/[0.15] border border-[#c084fc]/15 hover:border-[#c084fc]/30 text-[#c084fc]'
+            }`}>
+            <Wand2 className="w-4 h-4" /> AI 자동 생성
+          </button>
+          {showAiPanel && (
+            <div className="p-3 rounded-lg bg-[#18181b] border border-[#c084fc]/20 space-y-2">
+              <p className="text-[10px] text-[#71717a] text-center">{currentRoom + 1}F를 AI가 새로 생성합니다</p>
+              <div className="flex gap-1.5">
+                <button onClick={() => handleAiGenerate('easy')}
+                  className="flex-1 py-2 rounded-md bg-[#4ade80]/[0.08] border border-[#4ade80]/20 text-[#4ade80] text-xs font-semibold hover:bg-[#4ade80]/[0.15] transition-all">
+                  쉬움
+                </button>
+                <button onClick={() => handleAiGenerate('normal')}
+                  className="flex-1 py-2 rounded-md bg-[#facc15]/[0.08] border border-[#facc15]/20 text-[#facc15] text-xs font-semibold hover:bg-[#facc15]/[0.15] transition-all">
+                  보통
+                </button>
+                <button onClick={() => handleAiGenerate('hard')}
+                  className="flex-1 py-2 rounded-md bg-[#f87171]/[0.08] border border-[#f87171]/20 text-[#f87171] text-xs font-semibold hover:bg-[#f87171]/[0.15] transition-all">
+                  어려움
+                </button>
+              </div>
+              <p className="text-[9px] text-[#52525b] text-center">생성 후 수동으로 편집할 수 있습니다</p>
+            </div>
+          )}
+
           <button onClick={handleTestPlay} className="w-full bg-[#22d3ee]/[0.08] hover:bg-[#22d3ee]/[0.15] border border-[#22d3ee]/15 hover:border-[#22d3ee]/30 text-[#22d3ee] py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all">
             <Play className="w-4 h-4" /> Test Play
           </button>
