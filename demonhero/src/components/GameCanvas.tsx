@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { LevelData, BlockType } from '../types';
 import { motion } from 'motion/react';
 import { SPRITES, ANIM } from '../sprites';
@@ -16,14 +16,43 @@ interface Ember {
   color: string;
 }
 
+// Internal game resolution (logic runs at this size, then scales to fit screen)
+const GAME_W = 800;
+const GAME_H = 480;
+
 export function GameCanvas({ level, onWin, onLose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const keysRef = useRef({ ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false });
   const [isMobile, setIsMobile] = useState(false);
+  const [canvasSize, setCanvasSize] = useState({ w: GAME_W, h: GAME_H });
 
   useEffect(() => {
     setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
+
+  // Responsive canvas sizing
+  const updateCanvasSize = useCallback(() => {
+    const mobile = window.innerWidth < 768;
+    const maxW = mobile ? window.innerWidth : Math.min(window.innerWidth - 48, 800);
+    const maxH = mobile
+      ? window.innerHeight - 180 // leave room for controls + header
+      : window.innerHeight - 200;
+    const aspect = GAME_W / GAME_H;
+    let w = maxW;
+    let h = w / aspect;
+    if (h > maxH) {
+      h = maxH;
+      w = h * aspect;
+    }
+    setCanvasSize({ w: Math.floor(w), h: Math.floor(h) });
+  }, []);
+
+  useEffect(() => {
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+    return () => window.removeEventListener('resize', updateCanvasSize);
+  }, [updateCanvasSize]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,8 +74,9 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     // Slash trail particles (Dead Cells style)
     let slashTrails: { x: number; y: number; angle: number; life: number; size: number }[] = [];
 
+    // Bigger player sprite (was 24x32, now 36x44)
     let player = {
-      x: 40, y: 40, w: 24, h: 32,
+      x: 40, y: 40, w: 36, h: 44,
       vx: 0, vy: 0,
       hp: 5,
       isGrounded: false,
@@ -73,12 +103,14 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           let x = c * TILE_SIZE;
           let y = r * TILE_SIZE;
           if (val === BlockType.WALL) walls.push({ x, y, w: TILE_SIZE, h: TILE_SIZE });
-          if (val === BlockType.SPIKE) spikes.push({ x, y: y + 20, w: TILE_SIZE, h: 20 });
-          if (val === BlockType.MOB_PATROL) enemies.push({ x, y: y + 8, w: 32, h: 32, type: val, hp: 2, maxHp: 2, vx: 2, vy: 0, startX: x, hitFlash: 0 });
-          if (val === BlockType.MOB_STATIONARY) enemies.push({ x, y: y + 8, w: 32, h: 32, type: val, hp: 3, maxHp: 3, vx: 0, vy: 0, hitFlash: 0 });
-          if (val === BlockType.BOSS) enemies.push({ x, y: y - 24, w: 64, h: 64, type: val, hp: 10, maxHp: 10, vx: 0, vy: 0, timer: 0, weak: false, hitFlash: 0 });
+          if (val === BlockType.SPIKE) spikes.push({ x, y: y + 10, w: TILE_SIZE, h: 30 });
+          // Bigger enemies (was 32x32, now 40x40 for mobs)
+          if (val === BlockType.MOB_PATROL) enemies.push({ x, y: y, w: 40, h: 40, type: val, hp: 2, maxHp: 2, vx: 2, vy: 0, startX: x, hitFlash: 0 });
+          if (val === BlockType.MOB_STATIONARY) enemies.push({ x, y: y, w: 40, h: 40, type: val, hp: 3, maxHp: 3, vx: 0, vy: 0, hitFlash: 0 });
+          // Boss even bigger (was 64x64, now 80x80)
+          if (val === BlockType.BOSS) enemies.push({ x: x - 8, y: y - 40, w: 80, h: 80, type: val, hp: 10, maxHp: 10, vx: 0, vy: 0, timer: 0, weak: false, hitFlash: 0 });
           if (val === BlockType.DOOR) door = { x, y, w: TILE_SIZE, h: TILE_SIZE };
-          if (val === BlockType.SPAWN) { player.x = x + 8; player.y = y + 8; }
+          if (val === BlockType.SPAWN) { player.x = x + 2; player.y = y - 4; }
         }
       }
     };
@@ -173,14 +205,14 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         }
       }
 
-      if (player.y > 480) player.hp = 0;
+      if (player.y > GAME_H) player.hp = 0;
 
       if (keys.Space && player.attackTimer <= 0) {
         player.attackTimer = 20;
         let hitBox = {
-          x: player.facingRight ? player.x + player.w : player.x - 30,
+          x: player.facingRight ? player.x + player.w : player.x - 35,
           y: player.y,
-          w: 30,
+          w: 35,
           h: player.h
         };
 
@@ -197,14 +229,12 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
               if (e.weak) {
                 e.hp -= 1;
                 e.hitFlash = 8;
-                // Hit sparks
                 for (let i = 0; i < 8; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
               }
             } else {
               e.hp -= 1;
               e.hitFlash = 8;
               e.x += player.facingRight ? 10 : -10;
-              // Hit sparks
               for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
             }
           }
@@ -215,7 +245,6 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       for (let i = enemies.length - 1; i >= 0; i--) {
         let e = enemies[i];
         if (e.hp <= 0) {
-          // Death burst particles
           for (let j = 0; j < 15; j++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#7c3aed');
           enemies.splice(i, 1);
           continue;
@@ -247,7 +276,6 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           player.invulnTimer = 60;
           player.vy = -6;
           player.vx = player.facingRight ? -5 : 5;
-          // Blood particles
           for (let i = 0; i < 8; i++) spawnEmber(player.x + player.w / 2, player.y + player.h / 2, '#cc2200');
         }
       }
@@ -269,12 +297,10 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       }
 
       // === RENDER ===
-
-      // Dark dungeon background
       ctx.fillStyle = '#0d0a07';
-      ctx.fillRect(0, 0, 800, 480);
+      ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-      // Draw stone floor tiles for empty spaces
+      // Draw stone floor tiles
       const grid = level.rooms[currentRoomIdx].grid;
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -301,18 +327,17 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.fillStyle = gradient;
         ctx.fillRect(torch.x - 120, torch.y - 120, 240, 240);
 
-        // Spawn embers from torches occasionally
         if (frameCount % 15 === 0 && Math.random() > 0.5) {
           spawnEmber(torch.x + (Math.random() - 0.5) * 20, torch.y);
         }
       }
 
-      // Walls - stone bricks
+      // Walls
       for (let w of walls) {
         ctx.drawImage(SPRITES.wall, w.x, w.y, w.w, w.h);
       }
 
-      // Spikes
+      // Spikes (bigger render)
       for (let s of spikes) {
         ctx.drawImage(SPRITES.spike, s.x, s.y, s.w, s.h);
       }
@@ -328,10 +353,8 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         if (e.type === BlockType.MOB_PATROL) {
           ctx.shadowBlur = 12;
           ctx.shadowColor = '#7c3aed';
-          // Walk cycle animation
           const patrolFrame = Math.floor(frameCount / 12) % 2;
           const patrolSprite = ANIM.patrol.walk[patrolFrame];
-          // Flip based on movement direction
           if (e.vx < 0) {
             ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
             ctx.scale(-1, 1);
@@ -342,7 +365,6 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         if (e.type === BlockType.MOB_STATIONARY) {
           ctx.shadowBlur = 15;
           ctx.shadowColor = '#9333ea';
-          // Floating + cast cycle animation
           const floatY = Math.sin(frameCount * 0.04) * 3;
           const castFrame = Math.floor(frameCount / 20) % 2;
           const stationarySprite = ANIM.stationary.cast[castFrame];
@@ -352,7 +374,6 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.shadowBlur = 25;
           ctx.shadowColor = e.weak ? '#fca5a5' : '#8b0000';
           if (e.weak) ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.3) hue-rotate(60deg)';
-          // Boss idle cycle animation
           const bossFrame = Math.floor(frameCount / 30) % 2;
           const bossSprite = ANIM.boss.idle[bossFrame];
           ctx.drawImage(bossSprite, e.x, e.y, e.w, e.h);
@@ -360,12 +381,12 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
 
         ctx.restore();
 
-        // HP bar for enemies
+        // HP bar
         if (e.hp < e.maxHp) {
           const barW = e.w;
-          const barH = 4;
+          const barH = 5;
           const barX = e.x;
-          const barY = e.y - 8;
+          const barY = e.y - 10;
           ctx.fillStyle = '#1a1510';
           ctx.fillRect(barX, barY, barW, barH);
           ctx.fillStyle = e.type === BlockType.BOSS ? '#8b0000' : '#7c3aed';
@@ -382,7 +403,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.textAlign = 'center';
           ctx.shadowBlur = 10;
           ctx.shadowColor = '#d4a017';
-          ctx.fillText('VULNERABLE', e.x + e.w / 2, e.y - 14);
+          ctx.fillText('VULNERABLE', e.x + e.w / 2, e.y - 16);
           ctx.shadowBlur = 0;
           ctx.textAlign = 'start';
         }
@@ -395,7 +416,6 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.drawImage(SPRITES.door, door.x, door.y, door.w, door.h);
         ctx.shadowBlur = 0;
 
-        // Pulsing golden light from door
         const doorPulse = 0.3 + Math.sin(frameCount * 0.03) * 0.15;
         const doorGlow = ctx.createRadialGradient(door.x + 20, door.y + 20, 5, door.x + 20, door.y + 20, 50);
         doorGlow.addColorStop(0, `rgba(212, 160, 23, ${doorPulse})`);
@@ -416,7 +436,6 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.translate(-(player.x + player.w / 2), -(player.y + player.h / 2));
         }
 
-        // Pick animation frame based on state
         let heroSprite: HTMLImageElement;
         if (player.attackTimer > 12) {
           heroSprite = ANIM.hero.attack[0];
@@ -430,7 +449,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.restore();
       }
 
-      // Slash trails (Dead Cells style)
+      // Slash trails
       for (let i = slashTrails.length - 1; i >= 0; i--) {
         const s = slashTrails[i];
         s.life--;
@@ -440,21 +459,16 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.save();
         ctx.translate(s.x, s.y);
         ctx.rotate(s.angle);
-
-        // Slash arc
         ctx.beginPath();
         ctx.arc(0, 0, s.size, -0.6, 0.6);
         ctx.lineWidth = 3 * alpha;
         ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
         ctx.stroke();
-
-        // Inner glow
         ctx.beginPath();
         ctx.arc(0, 0, s.size * 0.8, -0.4, 0.4);
         ctx.lineWidth = 2 * alpha;
         ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.5})`;
         ctx.stroke();
-
         ctx.restore();
       }
 
@@ -478,18 +492,18 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.globalAlpha = 1;
       }
 
-      // Vignette - warm dungeon feel
-      const gradient = ctx.createRadialGradient(400, 240, 150, 400, 240, 500);
-      gradient.addColorStop(0, 'rgba(0,0,0,0)');
-      gradient.addColorStop(0.7, 'rgba(13,10,7,0.4)');
-      gradient.addColorStop(1, 'rgba(13,10,7,0.85)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 800, 480);
+      // Vignette
+      const vignette = ctx.createRadialGradient(GAME_W / 2, GAME_H / 2, 150, GAME_W / 2, GAME_H / 2, 500);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(0.7, 'rgba(13,10,7,0.4)');
+      vignette.addColorStop(1, 'rgba(13,10,7,0.85)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-      // HUD - Medieval style
+      // HUD
       ctx.shadowBlur = 0;
 
-      // HP hearts with warm glow
+      // HP hearts
       const heartY = 30;
       for (let i = 0; i < 5; i++) {
         const hx = 24 + i * 28;
@@ -502,7 +516,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.shadowBlur = 0;
         }
         ctx.font = '20px serif';
-        ctx.fillText('♥', hx, heartY);
+        ctx.fillText('\u2665', hx, heartY);
       }
       ctx.shadowBlur = 0;
 
@@ -510,11 +524,6 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       ctx.fillStyle = '#d4a017';
       ctx.font = 'bold 16px "Cinzel", serif';
       ctx.fillText(`Room ${currentRoomIdx + 1} / ${level.rooms.length}`, 24, 58);
-
-      // Controls hint
-      ctx.font = '13px "Cinzel", serif';
-      ctx.fillStyle = '#5a4d3e';
-      ctx.fillText('이동: ← → | 점프: ↑ | 공격: Space', 24, 465);
 
       animationFrameId = requestAnimationFrame(update);
     };
@@ -530,55 +539,73 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
 
   return (
     <motion.div
+      ref={containerRef}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center min-h-screen bg-dungeon p-4 relative"
+      className="flex flex-col items-center justify-start md:justify-center min-h-screen bg-dungeon p-2 md:p-4 relative"
     >
-      <div className="mb-6 text-center relative z-10">
-        <h2 className="text-3xl md:text-4xl font-display font-black text-[#d4a017] tracking-widest glow-gold mb-2">{level.name}</h2>
-        <p className="text-[#8b7355] font-medieval tracking-wide">
+      <div className="mb-2 md:mb-6 text-center relative z-10 mt-2 md:mt-0">
+        <h2 className="text-xl md:text-4xl font-display font-black text-[#d4a017] tracking-widest glow-gold mb-1">{level.name}</h2>
+        <p className="text-[#8b7355] font-medieval tracking-wide text-xs md:text-base">
           제작자: <span className="text-[#e8dcc8]">{level.creator}</span>
-          <span className="mx-3 text-[#3d3630]">|</span>
+          <span className="mx-2 md:mx-3 text-[#3d3630]">|</span>
           악명: <span className="text-[#7c3aed]">{level.infamy}</span>
         </p>
       </div>
 
-      <div className="relative z-10 p-1 rounded-lg border-medieval">
+      <div className="relative z-10 p-0.5 md:p-1 rounded-lg border-medieval">
         <canvas
           ref={canvasRef}
-          width={800}
-          height={480}
-          className="rounded bg-[#0d0a07] max-w-full"
-          style={{ touchAction: 'none' }}
+          width={GAME_W}
+          height={GAME_H}
+          className="rounded bg-[#0d0a07]"
+          style={{
+            touchAction: 'none',
+            width: canvasSize.w,
+            height: canvasSize.h,
+            imageRendering: 'pixelated',
+          }}
         />
       </div>
 
+      {!isMobile && (
+        <p className="mt-3 text-[#5a4d3e] font-medieval text-xs md:text-sm tracking-wide z-10">
+          이동: ← → | 점프: ↑ | 공격: Space
+        </p>
+      )}
+
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end p-4 pb-6 z-50 pointer-events-none select-none">
-          <div className="flex gap-2 items-end pointer-events-auto">
+        <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end px-3 pb-4 z-50 pointer-events-none select-none"
+          style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="flex gap-1.5 items-end pointer-events-auto">
             <button
-              className="w-16 h-16 rounded-xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-95 transition-all flex items-center justify-center"
+              className="w-[60px] h-[60px] rounded-2xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-80 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = false; }}
+              onTouchCancel={() => { keysRef.current.ArrowLeft = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >←</button>
             <button
-              className="w-16 h-16 rounded-xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-95 transition-all flex items-center justify-center"
+              className="w-[60px] h-[60px] rounded-2xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-80 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowRight = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowRight = false; }}
+              onTouchCancel={() => { keysRef.current.ArrowRight = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >→</button>
           </div>
-          <div className="flex gap-2 items-end pointer-events-auto">
+          <div className="flex gap-1.5 items-end pointer-events-auto">
             <button
-              className="w-16 h-16 rounded-xl btn-medieval text-[#d4a017] text-sm font-bold active:scale-95 transition-all flex items-center justify-center font-medieval"
+              className="w-[60px] h-[60px] rounded-2xl btn-medieval text-[#38bdf8] text-xs font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-80 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowUp = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowUp = false; }}
+              onTouchCancel={() => { keysRef.current.ArrowUp = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >JUMP</button>
             <button
-              className="w-16 h-16 rounded-xl btn-medieval text-[#cc2200] text-sm font-bold active:scale-95 transition-all flex items-center justify-center font-medieval"
+              className="w-[60px] h-[60px] rounded-2xl btn-medieval text-[#cc2200] text-xs font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-80 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.Space = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.Space = false; }}
+              onTouchCancel={() => { keysRef.current.Space = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >ATK</button>
           </div>

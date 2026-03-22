@@ -216,7 +216,7 @@ export default function App() {
 
   if (screen === 'result' && gameResult) {
     return (
-      <div className="min-h-screen bg-dungeon flex flex-col items-center justify-center text-[#e8dcc8] font-sans relative overflow-hidden">
+      <div className="min-h-[100dvh] bg-dungeon flex flex-col items-center justify-center text-[#e8dcc8] font-sans relative overflow-hidden p-4">
         {/* Ambient glow based on result */}
         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none ${gameResult.win ? 'bg-[#d4a017]/10' : 'bg-[#8b0000]/10'}`}></div>
 
