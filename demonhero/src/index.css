@@ -27,6 +27,11 @@
 body {
   background-color: #0d0a07;
   color: #e8dcc8;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
 }
 
 /* Parchment/Stone texture overlay */
@@ -170,6 +175,12 @@ body {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #6b5d4f, #4a3d30);
+}
+
+/* Allow text selection in inputs */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Selection color */
