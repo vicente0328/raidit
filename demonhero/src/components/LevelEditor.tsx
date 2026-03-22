@@ -45,86 +45,6 @@ interface Props {
   initialRooms?: RoomData[];
 }
 
-function checkReachability(rooms: RoomData[]): string | null {
-  const isWall = (grid: number[][], r: number, c: number) =>
-    r < 0 || r >= TOWER_ROWS || c < 0 || c >= TOWER_COLS || grid[r][c] === BlockType.WALL;
-
-  const isOpen = (grid: number[][], r: number, c: number) =>
-    r >= 0 && r < TOWER_ROWS && c >= 0 && c < TOWER_COLS && grid[r][c] !== BlockType.WALL;
-
-  for (let fi = 0; fi < rooms.length; fi++) {
-    const grid = rooms[fi].grid;
-    let spawn: [number, number] | null = null;
-    let door: [number, number] | null = null;
-
-    for (let r = 0; r < TOWER_ROWS; r++) {
-      for (let c = 0; c < TOWER_COLS; c++) {
-        if (grid[r][c] === BlockType.SPAWN) spawn = [r, c];
-        if (grid[r][c] === BlockType.DOOR) door = [r, c];
-      }
-    }
-
-    if (!spawn) return `${fi + 1}F: Spawn point missing`;
-    if (!door) return `${fi + 1}F: Door missing`;
-
-    // BFS reachability
-    const visited = new Set<string>();
-    const queue: [number, number][] = [spawn];
-    visited.add(`${spawn[0]},${spawn[1]}`);
-
-    while (queue.length > 0) {
-      const [cr, cc] = queue.shift()!;
-
-      // Check all reachable tiles from this position
-      for (let dr = -3; dr <= 10; dr++) {
-        for (let dc = -5; dc <= 5; dc++) {
-          const nr = cr + dr;
-          const nc = cc + dc;
-          const key = `${nr},${nc}`;
-
-          if (visited.has(key)) continue;
-          if (nr < 0 || nr >= TOWER_ROWS || nc < 0 || nc >= TOWER_COLS) continue;
-          if (isWall(grid, nr, nc)) continue;
-
-          // Target must be standable (has ground below) or be the door
-          const hasGround = nr === TOWER_ROWS - 1 || isWall(grid, nr + 1, nc);
-          const isDoor = grid[nr][nc] === BlockType.DOOR;
-          if (!hasGround && !isDoor) continue;
-
-          // Going up: need jump. Max 3 tiles up, horizontal range decreases with height
-          if (dr < 0) {
-            const maxHorizontal = Math.max(0, 5 - Math.abs(dr));
-            if (Math.abs(dc) > maxHorizontal) continue;
-          }
-
-          // Check no wall in direct path (simplified)
-          let blocked = false;
-          const minR = Math.min(cr, nr);
-          const maxR = Math.max(cr, nr);
-          for (let checkR = minR; checkR <= maxR; checkR++) {
-            if (isWall(grid, checkR, cc) && checkR !== cr) { blocked = true; break; }
-            if (isWall(grid, checkR, nc) && checkR !== nr) { blocked = true; break; }
-          }
-          if (blocked) continue;
-
-          visited.add(key);
-          queue.push([nr, nc]);
-        }
-      }
-    }
-
-    // Check if door is reachable
-    const doorKey = `${door[0]},${door[1]}`;
-    if (!visited.has(doorKey)) {
-      const belowDoorKey = `${door[0] + 1},${door[1]}`;
-      if (!visited.has(belowDoorKey) && !visited.has(doorKey)) {
-        return `${fi + 1}F: Door is unreachable from spawn! Check that platforms allow the hero to jump up (max 3 tiles up, 5 tiles horizontal).`;
-      }
-    }
-  }
-
-  return null;
-}
 
 export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
   const [rooms, setRooms] = useState<RoomData[]>(
@@ -146,7 +66,6 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
   const [showPalette, setShowPalette] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(40);
-  const reachWarningCountRef = useRef(0);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   useEffect(() => {
@@ -177,7 +96,6 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
       newRooms[currentRoom] = { ...newRooms[currentRoom], grid: newGrid };
       setHasClearedTest(false);
       setMessage(null);
-      reachWarningCountRef.current = 0;
       return newRooms;
     });
   }, [currentRoom, selectedBlock]);
@@ -257,20 +175,6 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
 
   const handleTestPlay = () => {
     if (!validateLevel()) return;
-    const reachError = checkReachability(rooms);
-    if (reachError) {
-      reachWarningCountRef.current += 1;
-      if (reachWarningCountRef.current <= 2) {
-        const remaining = 2 - reachWarningCountRef.current;
-        const skipNote = remaining > 0
-          ? ` (${remaining}번 더 누르면 무시 가능)`
-          : ' (다시 누르면 무시하고 진행)';
-        setMessage({ text: reachError + skipNote, type: 'error' });
-        return;
-      }
-      // After 2 warnings, allow skipping
-      reachWarningCountRef.current = 0;
-    }
     setIsTesting(true);
   };
 
