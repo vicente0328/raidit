@@ -35,7 +35,7 @@ export function HeroDashboard({ levels, stats, onPlay, onBack }: Props) {
             <h1 className="text-4xl md:text-6xl font-display font-black text-[#d4a017] mb-3 flex items-center gap-4 tracking-wider glow-gold">
               <Sword className="w-10 h-10 md:w-12 md:h-12" /> 용사 길드
             </h1>
-            <p className="text-[#8b7355] text-base md:text-lg font-medieval tracking-wide">전 세계의 악명 높은 마왕성들이 당신의 도전을 기다립니다.</p>
+            <p className="text-[#8b7355] text-base md:text-lg font-medieval tracking-wide">전 세계의 악명 높은 마왕탑들이 당신의 도전을 기다립니다.</p>
           </motion.div>
 
           <motion.div
@@ -52,7 +52,7 @@ export function HeroDashboard({ levels, stats, onPlay, onBack }: Props) {
 
         <h2 className="text-xl md:text-2xl font-display font-bold mb-8 flex items-center gap-4 tracking-wider text-[#e8dcc8]">
           <div className="w-1 h-7 bg-[#d4a017] shadow-[0_0_8px_rgba(212,160,23,0.6)]"></div>
-          공개된 마왕성 목록
+          공개된 마왕탑 목록
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

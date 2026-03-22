@@ -12,7 +12,7 @@ import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc, increment, quer
 
 const DEFAULT_LEVEL: LevelData = {
   id: 'default-1',
-  name: '초보 마왕의 성',
+  name: '초보 마왕의 탑',
   creator: 'System',
   creatorId: 'system',
   infamy: 150,
@@ -25,11 +25,17 @@ const DEFAULT_LEVEL: LevelData = {
   ]
 };
 
-// Add some enemies to default level
-DEFAULT_LEVEL.rooms[0].grid[9][10] = 3; // Patrol
-DEFAULT_LEVEL.rooms[1].grid[9][10] = 4; // Stationary
-DEFAULT_LEVEL.rooms[1].grid[9][12] = 2; // Spike
-DEFAULT_LEVEL.rooms[2].grid[9][10] = 5; // Boss
+// Floor 1: tutorial floor with a patrol enemy
+DEFAULT_LEVEL.rooms[0].grid[19][4] = 3; // Patrol on lower platform
+DEFAULT_LEVEL.rooms[0].grid[15][6] = 2; // Spike on mid platform
+
+// Floor 2: harder with stationary mage
+DEFAULT_LEVEL.rooms[1].grid[19][3] = 3; // Patrol
+DEFAULT_LEVEL.rooms[1].grid[11][3] = 4; // Stationary mage
+DEFAULT_LEVEL.rooms[1].grid[7][6] = 2;  // Spike near top
+
+// Floor 3: boss floor
+DEFAULT_LEVEL.rooms[2].grid[11][3] = 5;  // Boss on middle platform
 
 type Screen = 'home' | 'hero_dash' | 'demon_dash' | 'play' | 'edit' | 'result';
 
@@ -172,7 +178,7 @@ export default function App() {
     const levelId = `level-${Date.now()}`;
     const newLevel = {
       id: levelId,
-      name: `나의 마왕성 ${levels.filter(l => l.creator === user.displayName).length + 1}`,
+      name: `나의 마왕탑 ${levels.filter(l => l.creator === user.displayName).length + 1}`,
       creatorId: user.uid,
       creatorName: user.displayName || '이름 없는 마왕',
       infamy: 100,

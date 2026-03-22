@@ -36,7 +36,7 @@ export function DemonDashboard({ levels, stats, userId, onEdit, onBack }: Props)
               <span className="text-[#6b4d9a] text-xs tracking-[0.3em] font-medieval uppercase">Dark Architect's Hall</span>
             </div>
             <h1 className="text-4xl md:text-6xl font-display font-black text-[#7c3aed] mb-3 flex items-center gap-4 tracking-wider glow-royal">
-              <Skull className="w-10 h-10 md:w-12 md:h-12" /> 마왕성 관리소
+              <Skull className="w-10 h-10 md:w-12 md:h-12" /> 마왕탑 관리소
             </h1>
             <p className="text-[#8b7355] text-base md:text-lg font-medieval tracking-wide">치명적인 함정과 몬스터를 배치하여 용사들을 절망에 빠뜨리세요.</p>
           </motion.div>
@@ -56,7 +56,7 @@ export function DemonDashboard({ levels, stats, userId, onEdit, onBack }: Props)
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <h2 className="text-xl md:text-2xl font-display font-bold flex items-center gap-4 tracking-wider text-[#e8dcc8]">
             <div className="w-1 h-7 bg-[#7c3aed] shadow-[0_0_8px_rgba(124,58,237,0.6)]"></div>
-            내 마왕성 목록
+            내 마왕탑 목록
           </h2>
           <motion.button
             whileHover={{ scale: 1.02 }}
@@ -64,7 +64,7 @@ export function DemonDashboard({ levels, stats, userId, onEdit, onBack }: Props)
             onClick={onEdit}
             className="btn-medieval text-[#7c3aed] hover:text-[#a78bfa] px-6 py-3 rounded-xl font-medieval font-bold flex items-center gap-2 transition-colors"
           >
-            <Plus className="w-5 h-5" /> 새 마왕성 설계
+            <Plus className="w-5 h-5" /> 새 마왕탑 설계
           </motion.button>
         </div>
 
@@ -75,8 +75,8 @@ export function DemonDashboard({ levels, stats, userId, onEdit, onBack }: Props)
               className="col-span-full text-center py-28 border border-dashed border-[#3d3630]/50 rounded-2xl card-stone"
             >
               <Skull className="w-16 h-16 mx-auto mb-6 text-[#3d3630]" />
-              <p className="text-xl font-display font-bold mb-2 tracking-wider text-[#8b7355]">아직 설계한 마왕성이 없습니다.</p>
-              <p className="text-[#5a4d3e] font-medieval">새로운 마왕성을 만들어 용사들을 시험하세요!</p>
+              <p className="text-xl font-display font-bold mb-2 tracking-wider text-[#8b7355]">아직 설계한 마왕탑이 없습니다.</p>
+              <p className="text-[#5a4d3e] font-medieval">새로운 마왕탑을 만들어 용사들을 시험하세요!</p>
             </motion.div>
           ) : myLevels.map((l, i) => (
             <motion.div

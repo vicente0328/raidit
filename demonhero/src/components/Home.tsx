@@ -325,7 +325,7 @@ export function Home({ onSelectFaction, user }: Props) {
             <h2 className="text-3xl font-display font-bold mb-4 tracking-wider text-[#e8dcc8] relative z-10">마왕 진영</h2>
             <div className="w-12 h-px bg-[#4c1d95]/50 mb-4 group-hover:w-20 transition-all"></div>
             <p className="text-[#8b7355] text-center leading-relaxed font-medieval relative z-10">
-              나만의 마왕성을 설계하고<br/>도전하는 용사들을 좌절시키세요.
+              나만의 마왕탑을 설계하고<br/>도전하는 용사들을 좌절시키세요.
             </p>
           </motion.button>
 
@@ -347,7 +347,7 @@ export function Home({ onSelectFaction, user }: Props) {
             <h2 className="text-3xl font-display font-bold mb-4 tracking-wider text-[#e8dcc8] relative z-10">용사 진영</h2>
             <div className="w-12 h-px bg-[#d4a017]/50 mb-4 group-hover:w-20 transition-all"></div>
             <p className="text-[#8b7355] text-center leading-relaxed font-medieval relative z-10">
-              악명 높은 마왕성을 공략하고<br/>전설적인 명성을 얻으세요.
+              악명 높은 마왕탑을 공략하고<br/>전설적인 명성을 얻으세요.
             </p>
           </motion.button>
         </div>
