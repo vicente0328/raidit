@@ -99,7 +99,16 @@ export function HeroDashboard({ levels, stats, onPlay, onBack, onEquipItem, onUn
                   className="group bg-[#18181b] border border-[#27272a] hover:border-[#3f3f46] rounded-lg p-5 flex flex-col transition-all duration-200"
                 >
                   <div className="flex-1">
-                    <h3 className="text-base md:text-lg font-display font-bold tracking-wide text-[#fafafa] mb-0.5">{l.name}</h3>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="text-base md:text-lg font-display font-bold tracking-wide text-[#fafafa]">{l.name}</h3>
+                      <span className={`text-[8px] px-1 py-0.5 rounded font-semibold uppercase ${
+                        l.orientation === 'horizontal'
+                          ? 'bg-[#22d3ee]/10 text-[#22d3ee]'
+                          : 'bg-[#c084fc]/10 text-[#c084fc]'
+                      }`}>
+                        {l.orientation === 'horizontal' ? '던전' : '탑'}
+                      </span>
+                    </div>
                     <p className="text-[10px] text-[#52525b] mb-4">by <span className="text-[#71717a]">{l.creator}</span></p>
 
                     <div className="space-y-2 text-xs mb-5">

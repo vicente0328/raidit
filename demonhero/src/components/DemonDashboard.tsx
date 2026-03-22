@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LevelData, PlayerStats } from '../types';
-import { Skull, Plus, ArrowLeft, Flame, ShieldOff, ShieldCheck, Swords, Pencil, Layers, Check, Trash2 } from 'lucide-react';
+import { LevelData, PlayerStats, MapOrientation } from '../types';
+import { Skull, Plus, ArrowLeft, Flame, ShieldOff, ShieldCheck, Swords, Pencil, Layers, Check, Trash2, ArrowUpDown, ArrowLeftRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface Props {
@@ -8,16 +8,18 @@ interface Props {
   stats: PlayerStats;
   userId: string;
   maxTowers: number;
-  onEdit: (existingLevel: LevelData | null) => void;
+  onEdit: (existingLevel: LevelData) => void;
+  onCreateNew: (orientation: MapOrientation) => void;
   onRenameTower: (levelId: string, newName: string) => Promise<void>;
   onDeleteTower: (levelId: string) => Promise<void>;
   onBack: () => void;
 }
 
-export function DemonDashboard({ levels, stats, userId, maxTowers, onEdit, onRenameTower, onDeleteTower, onBack }: Props) {
+export function DemonDashboard({ levels, stats, userId, maxTowers, onEdit, onCreateNew, onRenameTower, onDeleteTower, onBack }: Props) {
   const myTowers = levels.filter(l => l.creatorId === userId);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [towerName, setTowerName] = useState('');
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,11 +104,33 @@ export function DemonDashboard({ levels, stats, userId, maxTowers, onEdit, onRen
             <span className="text-[10px] text-[#3f3f46]">{myTowers.length} / {maxTowers}</span>
           </div>
           {myTowers.length < maxTowers && (
-            <motion.button whileTap={{ scale: 0.97 }} onClick={() => onEdit(null)}
-              className="bg-[#c084fc]/[0.08] hover:bg-[#c084fc]/[0.15] border border-[#c084fc]/15 hover:border-[#c084fc]/30 text-[#c084fc] px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 transition-all duration-200"
-            >
-              <Plus className="w-3.5 h-3.5" /> 새 탑 만들기
-            </motion.button>
+            <div className="relative">
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowCreateMenu(!showCreateMenu)}
+                className="bg-[#c084fc]/[0.08] hover:bg-[#c084fc]/[0.15] border border-[#c084fc]/15 hover:border-[#c084fc]/30 text-[#c084fc] px-4 py-2 rounded-lg font-semibold text-xs flex items-center gap-2 transition-all duration-200"
+              >
+                <Plus className="w-3.5 h-3.5" /> 새로 만들기
+              </motion.button>
+              {showCreateMenu && (
+                <div className="absolute right-0 top-full mt-2 z-20 bg-[#18181b] border border-[#27272a] rounded-lg p-2 shadow-xl min-w-[200px]">
+                  <button onClick={() => { setShowCreateMenu(false); onCreateNew('vertical'); }}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[#c084fc]/[0.08] transition-all text-left">
+                    <ArrowUpDown className="w-5 h-5 text-[#c084fc]" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#e4e4e7]">마왕탑</p>
+                      <p className="text-[10px] text-[#52525b]">세로 맵 — 위로 올라가는 탑</p>
+                    </div>
+                  </button>
+                  <button onClick={() => { setShowCreateMenu(false); onCreateNew('horizontal'); }}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-[#22d3ee]/[0.08] transition-all text-left">
+                    <ArrowLeftRight className="w-5 h-5 text-[#22d3ee]" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#e4e4e7]">던전</p>
+                      <p className="text-[10px] text-[#52525b]">가로 맵 — 옆으로 진행하는 던전</p>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -116,12 +140,19 @@ export function DemonDashboard({ levels, stats, userId, maxTowers, onEdit, onRen
           >
             <Skull className="w-12 h-12 mx-auto mb-4 text-[#27272a]" />
             <p className="text-base font-semibold mb-1 text-[#52525b]">아직 탑이 없습니다</p>
-            <p className="text-[#3f3f46] text-xs mb-6">탑을 만들어 용사들에게 도전하세요.</p>
-            <motion.button whileTap={{ scale: 0.97 }} onClick={() => onEdit(null)}
-              className="bg-[#c084fc]/[0.08] hover:bg-[#c084fc]/[0.15] border border-[#c084fc]/15 hover:border-[#c084fc]/30 text-[#c084fc] px-6 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-all duration-200 mx-auto"
-            >
-              <Plus className="w-4 h-4" /> 첫 번째 탑 만들기
-            </motion.button>
+            <p className="text-[#3f3f46] text-xs mb-6">탑이나 던전을 만들어 용사들에게 도전하세요.</p>
+            <div className="flex gap-3 justify-center">
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => onCreateNew('vertical')}
+                className="bg-[#c084fc]/[0.08] hover:bg-[#c084fc]/[0.15] border border-[#c084fc]/15 hover:border-[#c084fc]/30 text-[#c084fc] px-5 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-all duration-200"
+              >
+                <ArrowUpDown className="w-4 h-4" /> 마왕탑
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => onCreateNew('horizontal')}
+                className="bg-[#22d3ee]/[0.08] hover:bg-[#22d3ee]/[0.15] border border-[#22d3ee]/15 hover:border-[#22d3ee]/30 text-[#22d3ee] px-5 py-3 rounded-lg font-semibold text-sm flex items-center gap-2 transition-all duration-200"
+              >
+                <ArrowLeftRight className="w-4 h-4" /> 던전
+              </motion.button>
+            </div>
           </motion.div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
@@ -150,9 +181,18 @@ export function DemonDashboard({ levels, stats, userId, maxTowers, onEdit, onRen
                     <Pencil className="w-3 h-3 text-[#3f3f46] group-hover:text-[#71717a] transition-colors shrink-0" />
                   </button>
                 )}
-                <p className="text-[#52525b] text-xs mb-4 flex items-center gap-1.5">
-                  <Layers className="w-3 h-3" /> {tower.rooms.length} floor{tower.rooms.length !== 1 ? 's' : ''}
-                </p>
+                <div className="flex items-center gap-2 mb-4">
+                  <p className="text-[#52525b] text-xs flex items-center gap-1.5">
+                    <Layers className="w-3 h-3" /> {tower.rooms.length} floor{tower.rooms.length !== 1 ? 's' : ''}
+                  </p>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-semibold tracking-wider uppercase ${
+                    tower.orientation === 'horizontal'
+                      ? 'bg-[#22d3ee]/10 text-[#22d3ee] border border-[#22d3ee]/20'
+                      : 'bg-[#c084fc]/10 text-[#c084fc] border border-[#c084fc]/20'
+                  }`}>
+                    {tower.orientation === 'horizontal' ? '던전' : '탑'}
+                  </span>
+                </div>
 
                 {/* Stats */}
                 <div className="space-y-2 text-xs mb-5 flex-1">

@@ -17,6 +17,8 @@ export interface RoomData {
   grid: number[][];
 }
 
+export type MapOrientation = 'vertical' | 'horizontal';
+
 export interface LevelData {
   id: string;
   name: string;
@@ -26,6 +28,7 @@ export interface LevelData {
   infamy: number;
   clears: number;
   attempts: number;
+  orientation: MapOrientation;
 }
 
 export type EquipSlot = 'weapon' | 'armor' | 'boots';

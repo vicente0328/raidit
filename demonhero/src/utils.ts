@@ -1,8 +1,17 @@
-import { BlockType, RoomData } from './types';
+import { BlockType, RoomData, MapOrientation } from './types';
 
-// Tower grid: 16 columns x 40 rows (vertical, larger map)
+// Vertical tower grid: 16 columns x 40 rows (tall, climb up)
 export const TOWER_COLS = 16;
 export const TOWER_ROWS = 40;
+
+// Horizontal dungeon grid: 40 columns x 16 rows (wide, run sideways)
+export const HORIZ_COLS = 40;
+export const HORIZ_ROWS = 16;
+
+export const getGridDimensions = (orientation: MapOrientation) =>
+  orientation === 'horizontal'
+    ? { cols: HORIZ_COLS, rows: HORIZ_ROWS }
+    : { cols: TOWER_COLS, rows: TOWER_ROWS };
 
 export const createEmptyGrid = (cols = TOWER_COLS, rows = TOWER_ROWS) => {
   return Array.from({ length: rows }, () => Array(cols).fill(0));
@@ -41,6 +50,40 @@ export const createFloorGrid = () => {
 
   // Door at top
   grid[4][7] = BlockType.DOOR;
+
+  return grid;
+};
+
+export const createHorizontalFloorGrid = () => {
+  const grid = createEmptyGrid(HORIZ_COLS, HORIZ_ROWS);
+
+  // Top ceiling
+  for (let c = 0; c < HORIZ_COLS; c++) {
+    grid[0][c] = BlockType.WALL;
+  }
+
+  // Bottom floor (2 rows thick)
+  for (let c = 0; c < HORIZ_COLS; c++) {
+    grid[HORIZ_ROWS - 1][c] = BlockType.WALL;
+    grid[HORIZ_ROWS - 2][c] = BlockType.WALL;
+  }
+
+  // Left and right walls
+  for (let r = 0; r < HORIZ_ROWS; r++) {
+    grid[r][0] = BlockType.WALL;
+    grid[r][HORIZ_COLS - 1] = BlockType.WALL;
+  }
+
+  // Some platforms spread horizontally
+  for (let c = 6; c <= 12; c++) grid[10][c] = BlockType.WALL;
+  for (let c = 16; c <= 22; c++) grid[8][c] = BlockType.WALL;
+  for (let c = 26; c <= 32; c++) grid[10][c] = BlockType.WALL;
+
+  // Spawn on left
+  grid[HORIZ_ROWS - 3][2] = BlockType.SPAWN;
+
+  // Door on right
+  grid[HORIZ_ROWS - 3][HORIZ_COLS - 3] = BlockType.DOOR;
 
   return grid;
 };

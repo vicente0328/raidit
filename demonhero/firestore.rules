@@ -45,7 +45,7 @@ service cloud.firestore {
     }
 
     function isValidLevel(data) {
-      return hasOnlyAllowedFields(['id', 'name', 'creatorId', 'creatorName', 'infamy', 'clears', 'attempts', 'rooms', 'createdAt']) &&
+      return hasOnlyAllowedFields(['id', 'name', 'creatorId', 'creatorName', 'infamy', 'clears', 'attempts', 'rooms', 'orientation', 'createdAt']) &&
              isValidStringLength(data.id, 1, 100) &&
              isValidStringLength(data.name, 1, 100) &&
              isValidStringLength(data.creatorId, 1, 100) &&
@@ -96,7 +96,7 @@ service cloud.firestore {
       // Authenticated users can update levels
       allow update: if isAuthenticated() &&
                     isValidLevel(request.resource.data) &&
-                    areImmutableFieldsUnchanged(['id', 'creatorId', 'creatorName', 'createdAt']) &&
+                    areImmutableFieldsUnchanged(['id', 'creatorId', 'creatorName', 'orientation', 'createdAt']) &&
                     (
                       // Owner can update rooms, name, and infamy
                       (request.auth.uid == resource.data.creatorId) ||

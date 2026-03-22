@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { LevelData, BlockType, PlayerStats, InventoryItem, EquipSlot, Equipment } from '../types';
 import { motion } from 'motion/react';
 import { SPRITES, ANIM } from '../sprites';
-import { TOWER_COLS, TOWER_ROWS } from '../utils';
+// Grid dimensions are read dynamically from level data
 import { getItem } from '../items';
 import { InventoryPanel } from './InventoryPanel';
 
@@ -26,8 +26,7 @@ const T = 48;
 // Canvas internal resolution — zoomed in (7 tiles wide view)
 const GAME_W = 7 * T; // 336
 const GAME_H = 10 * T; // 480 (portrait)
-// World height for one floor
-const WORLD_H = TOWER_ROWS * T; // 1200
+// World dimensions are computed dynamically per level
 
 export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventory }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,7 +79,11 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     let frameCount = 0;
     let cameraX = 0; // horizontal camera offset (world coords)
     let cameraY = 0; // vertical camera offset (world coords)
-    const WORLD_W = TOWER_COLS * T; // full world width
+    // Compute world dimensions from actual grid
+    const gridRows = level.rooms[0].grid.length;
+    const gridCols = level.rooms[0].grid[0]?.length ?? 16;
+    const WORLD_W = gridCols * T;
+    const worldH = gridRows * T;
 
     let transitionTimer = 0;
     let embers: Ember[] = [];
@@ -120,7 +123,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     const MOVE_SPEED = 5 + bonusSpeed;
     const ATK_DAMAGE = 1 + bonusAtk;
     let player = {
-      x: 3 * T, y: (TOWER_ROWS - 3) * T - (T + T / 2),
+      x: 3 * T, y: (gridRows - 3) * T - (T + T / 2),
       w: T - 8, h: T + T / 2,
       vx: 0, vy: 0,
       hp: MAX_HP,
@@ -184,6 +187,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     };
 
     loadRoom(0);
+    // Set initial camera to show player
+    cameraY = Math.max(0, player.y - GAME_H * 0.6);
+    cameraX = Math.max(0, player.x - GAME_W * 0.4);
 
     const keys = keysRef.current;
 
@@ -263,8 +269,6 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     const tryVibrate = (pattern: number | number[]) => {
       try { navigator?.vibrate?.(pattern); } catch (_) {}
     };
-
-    const worldH = level.rooms[0].grid.length * T;
 
     const update = () => {
       // Pause when inventory is open
@@ -1045,8 +1049,11 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       ctx.strokeStyle = '#3d3630';
       ctx.lineWidth = 1;
       ctx.strokeRect(barX, barTop, 6, barH);
-      // Player position on bar
-      const progress = 1 - (player.y / worldH);
+      // Player position on bar (vertical: Y progress bottom-to-top, horizontal: X progress left-to-right)
+      const isHoriz = gridCols > gridRows;
+      const progress = isHoriz
+        ? player.x / WORLD_W
+        : 1 - (player.y / worldH);
       const dotY = barTop + barH * (1 - progress);
       ctx.fillStyle = '#38bdf8';
       ctx.shadowBlur = 6;
@@ -1057,7 +1064,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       ctx.shadowBlur = 0;
       // Door marker
       if (door) {
-        const doorProgress = 1 - (door.y / worldH);
+        const doorProgress = isHoriz
+          ? door.x / WORLD_W
+          : 1 - (door.y / worldH);
         const doorDotY = barTop + barH * (1 - doorProgress);
         ctx.fillStyle = '#d4a017';
         ctx.fillRect(barX - 2, doorDotY - 2, 10, 4);

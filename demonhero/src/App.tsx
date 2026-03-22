@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Faction, LevelData, PlayerStats, RoomData, InventoryItem, EquipSlot, Equipment } from './types';
+import { Faction, LevelData, PlayerStats, RoomData, InventoryItem, EquipSlot, Equipment, MapOrientation } from './types';
 import { Home } from './components/Home';
 import { HeroDashboard } from './components/HeroDashboard';
 import { DemonDashboard } from './components/DemonDashboard';
@@ -21,6 +21,7 @@ const DEFAULT_LEVEL: LevelData = {
   infamy: 150,
   clears: 10,
   attempts: 45,
+  orientation: 'vertical',
   rooms: [
     { grid: createFloorGrid() },
     { grid: createFloorGrid() },
@@ -84,6 +85,7 @@ export default function App() {
   const [levels, setLevels] = useState<LevelData[]>([DEFAULT_LEVEL]);
   const [currentLevel, setCurrentLevel] = useState<LevelData | null>(null);
   const [editingLevel, setEditingLevel] = useState<LevelData | null>(null);
+  const [newTowerOrientation, setNewTowerOrientation] = useState<MapOrientation>('vertical');
   const [gameResult, setGameResult] = useState<{ win: boolean; fameChange: number; rewardItemId?: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -130,6 +132,7 @@ export default function App() {
             infamy: data.infamy,
             clears: data.clears,
             attempts: data.attempts,
+            orientation: data.orientation || 'vertical',
             rooms: JSON.parse(data.rooms)
           });
         });
@@ -290,12 +293,13 @@ export default function App() {
       try {
         const newLevel = {
           id: levelId,
-          name: `나의 마왕탑 #${towerNum}`,
+          name: newTowerOrientation === 'horizontal' ? `나의 던전 #${towerNum}` : `나의 마왕탑 #${towerNum}`,
           creatorId: user.uid,
           creatorName: user.displayName || '이름 없는 마왕',
           infamy: 100,
           clears: 0,
           attempts: 0,
+          orientation: newTowerOrientation,
           rooms: JSON.stringify(rooms),
           createdAt: new Date().toISOString()
         };
@@ -352,11 +356,15 @@ export default function App() {
   };
 
   if (screen === 'demon_dash') {
-    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} maxTowers={MAX_TOWERS_PER_USER} onEdit={(existing) => { setEditingLevel(existing); setScreen('edit'); }} onRenameTower={handleRenameTower} onDeleteTower={handleDeleteLevel} onBack={() => setScreen('home')} />;
+    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} maxTowers={MAX_TOWERS_PER_USER}
+      onEdit={(existing) => { setEditingLevel(existing); setScreen('edit'); }}
+      onCreateNew={(ori) => { setNewTowerOrientation(ori); setEditingLevel(null); setScreen('edit'); }}
+      onRenameTower={handleRenameTower} onDeleteTower={handleDeleteLevel} onBack={() => setScreen('home')} />;
   }
 
   if (screen === 'edit') {
-    return <LevelEditor onSave={handleSaveLevel} onCancel={() => { setEditingLevel(null); setScreen('demon_dash'); }} initialRooms={editingLevel?.rooms} />;
+    const editorOrientation = editingLevel?.orientation ?? newTowerOrientation;
+    return <LevelEditor onSave={handleSaveLevel} onCancel={() => { setEditingLevel(null); setScreen('demon_dash'); }} initialRooms={editingLevel?.rooms} orientation={editorOrientation} />;
   }
 
   if (screen === 'play' && currentLevel) {

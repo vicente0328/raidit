@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { BlockType, RoomData } from '../types';
-import { createFloorGrid, TOWER_COLS, TOWER_ROWS } from '../utils';
+import { BlockType, RoomData, MapOrientation } from '../types';
+import { createFloorGrid, createHorizontalFloorGrid, TOWER_COLS, TOWER_ROWS, HORIZ_COLS, HORIZ_ROWS, getGridDimensions } from '../utils';
 import { Save, X, Layers, Play, ChevronUp, ChevronDown, Wand2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { SPRITE_URLS } from '../sprites';
 import { GameCanvas } from './GameCanvas';
-import { generateRoom, Difficulty } from '../roomGenerator';
+import { generateRoomForOrientation, Difficulty } from '../roomGenerator';
 
 const BLOCK_IMAGES: Record<number, string> = {
   [BlockType.EMPTY]: '',
@@ -50,33 +50,37 @@ interface Props {
   onSave: (rooms: RoomData[]) => Promise<void> | void;
   onCancel: () => void;
   initialRooms?: RoomData[];
+  orientation: MapOrientation;
 }
 
 
-// Migrate old grids to current TOWER_ROWS x TOWER_COLS dimensions
-function migrateGrid(grid: number[][]): number[][] {
+// Migrate old grids to current dimensions
+function migrateGrid(grid: number[][], orientation: MapOrientation): number[][] {
+  const { cols: targetCols, rows: targetRows } = getGridDimensions(orientation);
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
-  if (rows === TOWER_ROWS && cols === TOWER_COLS) return grid;
-  // Create a fresh grid and copy over the old data
-  const newGrid = createFloorGrid();
-  for (let r = 0; r < Math.min(rows, TOWER_ROWS); r++) {
-    for (let c = 0; c < Math.min(cols, TOWER_COLS); c++) {
+  if (rows === targetRows && cols === targetCols) return grid;
+  const newGrid = orientation === 'horizontal' ? createHorizontalFloorGrid() : createFloorGrid();
+  for (let r = 0; r < Math.min(rows, targetRows); r++) {
+    for (let c = 0; c < Math.min(cols, targetCols); c++) {
       newGrid[r][c] = grid[r][c];
     }
   }
   return newGrid;
 }
 
-export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
+export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Props) {
+  const { cols: GRID_COLS, rows: GRID_ROWS } = getGridDimensions(orientation);
+  const createDefaultGrid = orientation === 'horizontal' ? createHorizontalFloorGrid : createFloorGrid;
+
   const [rooms, setRooms] = useState<RoomData[]>(() => {
     if (initialRooms && initialRooms.length > 0) {
-      return initialRooms.map(room => ({ grid: migrateGrid(room.grid) }));
+      return initialRooms.map(room => ({ grid: migrateGrid(room.grid, orientation) }));
     }
     return [
-      { grid: createFloorGrid() },
-      { grid: createFloorGrid() },
-      { grid: createFloorGrid() }
+      { grid: createDefaultGrid() },
+      { grid: createDefaultGrid() },
+      { grid: createDefaultGrid() }
     ];
   });
   const [currentRoom, setCurrentRoom] = useState(0);
@@ -97,9 +101,10 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
       setIsMobile(mobile);
       if (mobile) {
         const availW = window.innerWidth - 16;
-        setCellSize(Math.floor(availW / TOWER_COLS));
+        setCellSize(Math.floor(availW / GRID_COLS));
       } else {
-        setCellSize(36);
+        // For horizontal maps with many columns, use smaller cells
+        setCellSize(orientation === 'horizontal' ? 24 : 36);
       }
     };
     check();
@@ -159,7 +164,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
       const y = touch.clientY - rect.top + grid.scrollTop;
       const c = Math.floor(x / cellSize);
       const r = Math.floor(y / cellSize);
-      if (r >= 0 && r < TOWER_ROWS && c >= 0 && c < TOWER_COLS) {
+      if (r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
         handleCellAction(r, c);
       }
     }
@@ -186,7 +191,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
   const [showAiPanel, setShowAiPanel] = useState(false);
 
   const handleAiGenerate = (diff: Difficulty) => {
-    const newGrid = generateRoom(diff);
+    const newGrid = generateRoomForOrientation(orientation, diff);
     setRooms(prev => {
       const copy = [...prev];
       copy[currentRoom] = { grid: newGrid };
@@ -215,7 +220,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
   };
 
   const handleAddFloor = () => {
-    setRooms(prev => [...prev, { grid: createFloorGrid() }]);
+    setRooms(prev => [...prev, { grid: createDefaultGrid() }]);
     setCurrentRoom(rooms.length); // switch to the new floor
     setHasClearedTest(false);
     setMessage(null);
@@ -225,7 +230,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
     return (
       <div className="relative w-full h-[100dvh] bg-[#09090b] overflow-hidden flex flex-col items-center justify-center">
         <GameCanvas
-          level={{ id: 'test', name: '테스트 플레이', creator: '마왕 (테스트)', creatorId: 'test', infamy: 0, clears: 0, attempts: 0, rooms }}
+          level={{ id: 'test', name: '테스트 플레이', creator: '마왕 (테스트)', creatorId: 'test', infamy: 0, clears: 0, attempts: 0, rooms, orientation }}
           stats={{ fame: 0, infamy: 0, inventory: [], equipment: { weapon: null, armor: null, boots: null } }}
           onWin={() => { setHasClearedTest(true); setIsTesting(false); setMessage({ text: '테스트 클리어! 이제 저장할 수 있습니다.', type: 'success' }); }}
           onLose={() => { setIsTesting(false); setMessage({ text: '테스트 실패... 난이도를 조절해보세요.', type: 'error' }); }}
@@ -304,13 +309,13 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
         )}
 
         {/* Grid */}
-        <div ref={gridContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-2">
+        <div ref={gridContainerRef} className={`flex-1 ${orientation === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'} flex justify-center py-2`}>
           <div
             className="border border-[#27272a] bg-[#09090b]"
             style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)`,
-              touchAction: 'pan-y',
+              gridTemplateColumns: `repeat(${GRID_COLS}, ${cellSize}px)`,
+              touchAction: orientation === 'horizontal' ? 'pan-x' : 'pan-y',
             }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
@@ -482,11 +487,11 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
         </div>
 
         {/* Grid */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 z-10 custom-scrollbar">
+        <div className={`flex-1 ${orientation === 'horizontal' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'} py-4 z-10 custom-scrollbar`}>
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.15 }}
             className="border border-[#27272a] bg-[#09090b] rounded-md overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.4)]"
-            style={{ display: 'grid', gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)` }}
+            style={{ display: 'grid', gridTemplateColumns: `repeat(${GRID_COLS}, ${cellSize}px)` }}
             onMouseLeave={() => setIsDragging(false)}
             onMouseUp={() => setIsDragging(false)}
           >
