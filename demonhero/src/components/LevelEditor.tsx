@@ -146,6 +146,8 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
   const [showPalette, setShowPalette] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(40);
+  const reachWarningCountRef = useRef(0);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   useEffect(() => {
     const check = () => {
@@ -166,31 +168,59 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
   const handleCellAction = useCallback((r: number, c: number) => {
     setRooms(prev => {
       const oldVal = prev[currentRoom].grid[r][c];
-      if (oldVal === selectedBlock) return prev; // no change
+      // Toggle: if same block, erase it; if different, place selected block
+      const newVal = oldVal === selectedBlock ? BlockType.EMPTY : selectedBlock;
+      if (oldVal === newVal) return prev; // no actual change
       const newRooms = [...prev];
       const newGrid = newRooms[currentRoom].grid.map(row => [...row]);
-      newGrid[r][c] = selectedBlock;
+      newGrid[r][c] = newVal;
       newRooms[currentRoom] = { ...newRooms[currentRoom], grid: newGrid };
       setHasClearedTest(false);
       setMessage(null);
+      reachWarningCountRef.current = 0;
       return newRooms;
     });
   }, [currentRoom, selectedBlock]);
 
-  // 1 finger = draw, 2 fingers = scroll (browser handles pan-y)
+  // Single finger: tap = place/erase block, swipe = scroll
+  // Two fingers: scroll (browser handles)
+  const TAP_THRESHOLD = 10; // px movement threshold
+  const TAP_TIME_LIMIT = 300; // ms
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length >= 2) return; // let browser handle 2-finger scroll
-    e.preventDefault();
+    if (e.touches.length >= 2) {
+      touchStartRef.current = null;
+      return;
+    }
     const touch = e.touches[0];
-    const grid = gridContainerRef.current;
-    if (!grid) return;
-    const rect = grid.getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top + grid.scrollTop;
-    const c = Math.floor(x / cellSize);
-    const r = Math.floor(y / cellSize);
-    if (r >= 0 && r < TOWER_ROWS && c >= 0 && c < TOWER_COLS) {
-      handleCellAction(r, c);
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    // Don't preventDefault — let browser handle scroll naturally
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    if (e.changedTouches.length === 0) return;
+
+    const touch = e.changedTouches[0];
+    const dx = Math.abs(touch.clientX - start.x);
+    const dy = Math.abs(touch.clientY - start.y);
+    const elapsed = Date.now() - start.time;
+
+    // Only place block if it was a short, stationary tap
+    if (dx < TAP_THRESHOLD && dy < TAP_THRESHOLD && elapsed < TAP_TIME_LIMIT) {
+      e.preventDefault();
+      const grid = gridContainerRef.current;
+      if (!grid) return;
+      const rect = grid.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top + grid.scrollTop;
+      const c = Math.floor(x / cellSize);
+      const r = Math.floor(y / cellSize);
+      if (r >= 0 && r < TOWER_ROWS && c >= 0 && c < TOWER_COLS) {
+        handleCellAction(r, c);
+      }
     }
   }, [cellSize, handleCellAction]);
 
@@ -229,8 +259,17 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
     if (!validateLevel()) return;
     const reachError = checkReachability(rooms);
     if (reachError) {
-      setMessage({ text: reachError, type: 'error' });
-      return;
+      reachWarningCountRef.current += 1;
+      if (reachWarningCountRef.current <= 2) {
+        const remaining = 2 - reachWarningCountRef.current;
+        const skipNote = remaining > 0
+          ? ` (${remaining}번 더 누르면 무시 가능)`
+          : ' (다시 누르면 무시하고 진행)';
+        setMessage({ text: reachError + skipNote, type: 'error' });
+        return;
+      }
+      // After 2 warnings, allow skipping
+      reachWarningCountRef.current = 0;
     }
     setIsTesting(true);
   };
@@ -308,6 +347,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
               touchAction: 'pan-y',
             }}
             onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
           >
             {rooms[currentRoom].grid.map((row, r) =>
               row.map((cell, c) => (
@@ -327,7 +367,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms }: Props) {
         {/* Bottom palette */}
         <div className="shrink-0 border-t border-[#27272a] bg-[#111114]" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
           <div className="flex items-center px-3 py-1.5 gap-2">
-            <span className="flex-shrink-0 text-[10px] text-[#3f3f46]">1-tap: draw / 2-finger: scroll</span>
+            <span className="flex-shrink-0 text-[10px] text-[#3f3f46]">tap: draw / swipe: scroll</span>
             <button onClick={() => setShowPalette(!showPalette)}
               className="flex-1 flex items-center justify-center gap-2 text-[#52525b] text-xs"
             >
