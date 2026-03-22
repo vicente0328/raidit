@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { LevelData, BlockType } from '../types';
 import { motion } from 'motion/react';
-import { SPRITES } from '../sprites';
+import { SPRITES, ANIM } from '../sprites';
 
 interface Props {
   level: LevelData;
@@ -328,20 +328,34 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         if (e.type === BlockType.MOB_PATROL) {
           ctx.shadowBlur = 12;
           ctx.shadowColor = '#7c3aed';
-          ctx.drawImage(SPRITES.patrol, e.x, e.y, e.w, e.h);
+          // Walk cycle animation
+          const patrolFrame = Math.floor(frameCount / 12) % 2;
+          const patrolSprite = ANIM.patrol.walk[patrolFrame];
+          // Flip based on movement direction
+          if (e.vx < 0) {
+            ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
+            ctx.scale(-1, 1);
+            ctx.translate(-(e.x + e.w / 2), -(e.y + e.h / 2));
+          }
+          ctx.drawImage(patrolSprite, e.x, e.y, e.w, e.h);
         }
         if (e.type === BlockType.MOB_STATIONARY) {
           ctx.shadowBlur = 15;
           ctx.shadowColor = '#9333ea';
-          // Floating animation
+          // Floating + cast cycle animation
           const floatY = Math.sin(frameCount * 0.04) * 3;
-          ctx.drawImage(SPRITES.stationary, e.x, e.y + floatY, e.w, e.h);
+          const castFrame = Math.floor(frameCount / 20) % 2;
+          const stationarySprite = ANIM.stationary.cast[castFrame];
+          ctx.drawImage(stationarySprite, e.x, e.y + floatY, e.w, e.h);
         }
         if (e.type === BlockType.BOSS) {
           ctx.shadowBlur = 25;
           ctx.shadowColor = e.weak ? '#fca5a5' : '#8b0000';
           if (e.weak) ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.3) hue-rotate(60deg)';
-          ctx.drawImage(SPRITES.boss, e.x, e.y, e.w, e.h);
+          // Boss idle cycle animation
+          const bossFrame = Math.floor(frameCount / 30) % 2;
+          const bossSprite = ANIM.boss.idle[bossFrame];
+          ctx.drawImage(bossSprite, e.x, e.y, e.w, e.h);
         }
 
         ctx.restore();
@@ -390,7 +404,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.fillRect(door.x - 30, door.y - 30, 100, 100);
       }
 
-      // Player
+      // Player with animation
       if (player.invulnTimer % 10 < 5) {
         ctx.save();
         ctx.shadowBlur = 12;
@@ -401,7 +415,18 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           ctx.scale(-1, 1);
           ctx.translate(-(player.x + player.w / 2), -(player.y + player.h / 2));
         }
-        ctx.drawImage(SPRITES.hero, player.x, player.y, player.w, player.h);
+
+        // Pick animation frame based on state
+        let heroSprite: HTMLImageElement;
+        if (player.attackTimer > 12) {
+          heroSprite = ANIM.hero.attack[0];
+        } else if (Math.abs(player.vx) > 0) {
+          const runFrame = Math.floor(frameCount / 8) % 2;
+          heroSprite = ANIM.hero.run[runFrame];
+        } else {
+          heroSprite = ANIM.hero.idle[0];
+        }
+        ctx.drawImage(heroSprite, player.x, player.y, player.w, player.h);
         ctx.restore();
       }
 
