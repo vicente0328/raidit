@@ -135,7 +135,7 @@ export function Home({ onSelectFaction, user }: Props) {
           transition={{ delay: 0.7, duration: 0.8 }}
           className="text-[#52525b] text-sm md:text-base font-medieval tracking-[0.15em]"
         >
-          Build towers. Raid towers. Claim glory.
+          Build towers. Raid towers.<br/>Claim glory.
         </motion.p>
       </motion.div>
 
@@ -266,7 +266,6 @@ export function Home({ onSelectFaction, user }: Props) {
           <div className="grid grid-cols-2 gap-3 md:gap-4">
             {/* Demon */}
             <motion.button
-              initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.5 }}
               onClick={() => onSelectFaction('demon')}
               className="group relative rounded-xl p-5 md:p-8 flex flex-col items-center text-center transition-all duration-300 active:scale-[0.97]
                 bg-[#18181b] border border-[#27272a] hover:border-[#c084fc]/30
@@ -291,7 +290,6 @@ export function Home({ onSelectFaction, user }: Props) {
 
             {/* Hero */}
             <motion.button
-              initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.6 }}
               onClick={() => onSelectFaction('hero')}
               className="group relative rounded-xl p-5 md:p-8 flex flex-col items-center text-center transition-all duration-300 active:scale-[0.97]
                 bg-[#18181b] border border-[#27272a] hover:border-[#22d3ee]/30

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { LevelData, PlayerStats } from '../types';
-import { Skull, Plus, ArrowLeft, Flame, ShieldOff, ShieldCheck, Swords, Pencil, Layers } from 'lucide-react';
+import { Skull, Plus, ArrowLeft, Flame, ShieldOff, ShieldCheck, Swords, Pencil, Layers, Check } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface Props {
@@ -8,11 +8,40 @@ interface Props {
   stats: PlayerStats;
   userId: string;
   onEdit: (existingLevel: LevelData | null) => void;
+  onRenameTower: (newName: string) => Promise<void>;
   onBack: () => void;
 }
 
-export function DemonDashboard({ levels, stats, userId, onEdit, onBack }: Props) {
+export function DemonDashboard({ levels, stats, userId, onEdit, onRenameTower, onBack }: Props) {
   const myTower = levels.find(l => l.creatorId === userId) || null;
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [towerName, setTowerName] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  const handleStartRename = () => {
+    if (!myTower) return;
+    setTowerName(myTower.name);
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = towerName.trim();
+    if (!trimmed || trimmed === myTower?.name) {
+      setIsEditingName(false);
+      return;
+    }
+    try {
+      await onRenameTower(trimmed);
+    } catch {}
+    setIsEditingName(false);
+  };
 
   return (
     <motion.div
@@ -82,7 +111,26 @@ export function DemonDashboard({ levels, stats, userId, onEdit, onBack }: Props)
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15 }}
             className="bg-[#18181b] border border-[#27272a] rounded-lg p-5 md:p-6 max-w-lg"
           >
-            <h3 className="text-base md:text-lg font-display font-bold tracking-wide text-[#fafafa] mb-1">{myTower.name}</h3>
+            {isEditingName ? (
+              <div className="flex items-center gap-2 mb-1">
+                <input
+                  ref={nameInputRef}
+                  value={towerName}
+                  onChange={e => setTowerName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setIsEditingName(false); }}
+                  maxLength={30}
+                  className="bg-[#09090b] border border-[#c084fc]/30 rounded-md px-2 py-1 text-base font-display font-bold tracking-wide text-[#fafafa] outline-none focus:border-[#c084fc]/60 w-full"
+                />
+                <button onClick={handleSaveName} className="text-[#4ade80] hover:text-[#4ade80]/80 shrink-0">
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleStartRename} className="flex items-center gap-2 group mb-1 text-left">
+                <h3 className="text-base md:text-lg font-display font-bold tracking-wide text-[#fafafa]">{myTower.name}</h3>
+                <Pencil className="w-3 h-3 text-[#3f3f46] group-hover:text-[#71717a] transition-colors" />
+              </button>
+            )}
             <p className="text-[#52525b] text-xs mb-4 flex items-center gap-1.5">
               <Layers className="w-3 h-3" /> {myTower.rooms.length} floor{myTower.rooms.length !== 1 ? 's' : ''}
             </p>

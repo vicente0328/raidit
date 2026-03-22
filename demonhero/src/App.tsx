@@ -129,18 +129,22 @@ export default function App() {
     setScreen('result');
 
     try {
-      // Update user fame
+      // Update hero fame
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { fame: increment(fameGained) });
 
       // Update level stats
-      if (currentLevel.id !== 'default-1') {
-        const levelRef = doc(db, 'levels', currentLevel.id);
-        await updateDoc(levelRef, { 
-          clears: increment(1), 
-          attempts: increment(1),
-          infamy: Math.max(0, currentLevel.infamy - fameGained)
-        });
+      const levelRef = doc(db, 'levels', currentLevel.id);
+      await updateDoc(levelRef, {
+        clears: increment(1),
+        attempts: increment(1),
+        infamy: Math.max(0, currentLevel.infamy - fameGained)
+      });
+
+      // Update tower creator's infamy
+      if (currentLevel.creatorId && currentLevel.creatorId !== user.uid && currentLevel.creatorId !== 'system') {
+        const creatorRef = doc(db, 'users', currentLevel.creatorId);
+        await updateDoc(creatorRef, { infamy: increment(-fameGained) });
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'levels/users');
@@ -155,18 +159,23 @@ export default function App() {
     setScreen('result');
 
     try {
+      // Update hero fame
       const userRef = doc(db, 'users', user.uid);
       if (fameLost > 0) {
         await updateDoc(userRef, { fame: increment(-fameLost) });
       }
 
       // Update level stats
-      if (currentLevel.id !== 'default-1') {
-        const levelRef = doc(db, 'levels', currentLevel.id);
-        await updateDoc(levelRef, { 
-          attempts: increment(1),
-          infamy: increment(fameLost)
-        });
+      const levelRef = doc(db, 'levels', currentLevel.id);
+      await updateDoc(levelRef, {
+        attempts: increment(1),
+        infamy: increment(fameLost)
+      });
+
+      // Update tower creator's infamy
+      if (currentLevel.creatorId && currentLevel.creatorId !== user.uid && currentLevel.creatorId !== 'system') {
+        const creatorRef = doc(db, 'users', currentLevel.creatorId);
+        await updateDoc(creatorRef, { infamy: increment(fameLost) });
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'levels/users');
@@ -224,8 +233,14 @@ export default function App() {
     return <HeroDashboard levels={levels} stats={stats} onPlay={handlePlay} onBack={() => setScreen('home')} />;
   }
 
+  const handleRenameTower = async (newName: string) => {
+    if (!user) return;
+    const levelRef = doc(db, 'levels', `tower-${user.uid}`);
+    await updateDoc(levelRef, { name: newName });
+  };
+
   if (screen === 'demon_dash') {
-    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} onEdit={(existing) => { setEditingLevel(existing); setScreen('edit'); }} onBack={() => setScreen('home')} />;
+    return <DemonDashboard levels={levels} stats={stats} userId={user?.uid ?? ''} onEdit={(existing) => { setEditingLevel(existing); setScreen('edit'); }} onRenameTower={handleRenameTower} onBack={() => setScreen('home')} />;
   }
 
   if (screen === 'edit') {

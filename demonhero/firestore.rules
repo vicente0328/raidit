@@ -93,12 +93,12 @@ service cloud.firestore {
                     isValidLevel(request.resource.data) &&
                     request.resource.data.creatorId == request.auth.uid;
                     
-      // Authenticated users can update levels (to increment clears/attempts or update infamy)
-      allow update: if isAuthenticated() && 
+      // Authenticated users can update levels
+      allow update: if isAuthenticated() &&
                     isValidLevel(request.resource.data) &&
-                    areImmutableFieldsUnchanged(['id', 'creatorId', 'creatorName', 'rooms', 'createdAt']) &&
+                    areImmutableFieldsUnchanged(['id', 'creatorId', 'creatorName', 'createdAt']) &&
                     (
-                      // Owner can update name and infamy
+                      // Owner can update rooms, name, and infamy
                       (request.auth.uid == resource.data.creatorId) ||
                       // Non-owners can only update clears, attempts, and infamy
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clears', 'attempts', 'infamy'])
