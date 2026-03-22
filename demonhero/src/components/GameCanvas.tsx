@@ -1,14 +1,18 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { LevelData, BlockType } from '../types';
+import { LevelData, BlockType, PlayerStats, InventoryItem, EquipSlot, Equipment } from '../types';
 import { motion } from 'motion/react';
 import { SPRITES, ANIM } from '../sprites';
 import { TOWER_COLS, TOWER_ROWS } from '../utils';
+import { getItem } from '../items';
+import { InventoryPanel } from './InventoryPanel';
 
 interface Props {
   level: LevelData;
-  onWin: () => void;
-  onLose: () => void;
+  stats: PlayerStats;
+  onWin: (pickedUpItems: InventoryItem[]) => void;
+  onLose: (pickedUpItems: InventoryItem[]) => void;
   onQuit?: () => void;
+  onSaveInventory: (inv: InventoryItem[], equip?: Equipment) => Promise<void>;
 }
 
 interface Ember {
@@ -25,9 +29,16 @@ const GAME_H = 10 * T; // 480 (portrait)
 // World height for one floor
 const WORLD_H = TOWER_ROWS * T; // 1200
 
-export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
+export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventory }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const pausedRef = useRef(false);
+  const useItemRef = useRef<((itemId: string) => void) | null>(null);
+  const pickedUpItemsRef = useRef<InventoryItem[]>([]);
+  const [inGameInventory, setInGameInventory] = useState<InventoryItem[]>(() =>
+    stats.inventory.filter(i => getItem(i.itemId)?.type === 'consumable').map(i => ({ ...i }))
+  );
   const keysRef = useRef({ ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false });
   const [isMobile, setIsMobile] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: GAME_W, h: GAME_H });
@@ -86,13 +97,31 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
     const COYOTE_FRAMES = 8;    // ~0.13s at 60fps
     const JUMP_BUFFER_FRAMES = 8;
 
+    // Compute equipment bonuses
+    let bonusAtk = 0, bonusDef = 0, bonusSpeed = 0, bonusMaxHp = 0;
+    for (const slot of ['weapon', 'armor', 'boots'] as EquipSlot[]) {
+      const id = stats.equipment[slot];
+      if (id) {
+        const item = getItem(id);
+        if (item) {
+          bonusAtk += item.atk || 0;
+          bonusDef += item.def || 0;
+          bonusSpeed += item.speed || 0;
+          bonusMaxHp += item.maxHp || 0;
+        }
+      }
+    }
+
     // Player — collision box is tight body (1 tile wide, ~1.5 tiles tall), sprite renders at 2 tiles
     const PLAYER_DRAW_W = 2 * T;
     const PLAYER_DRAW_H = 2 * T + 16;
-    const MAX_HP = 100;
+    const BASE_MAX_HP = 100;
+    const MAX_HP = BASE_MAX_HP + bonusMaxHp;
+    const MOVE_SPEED = 5 + bonusSpeed;
+    const ATK_DAMAGE = 1 + bonusAtk;
     let player = {
       x: 3 * T, y: (TOWER_ROWS - 3) * T - (T + T / 2),
-      w: T - 8, h: T + T / 2, // collision: narrow body (40px wide, 72px tall) — no sword/arm overlap
+      w: T - 8, h: T + T / 2,
       vx: 0, vy: 0,
       hp: MAX_HP,
       isGrounded: false,
@@ -158,11 +187,24 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
     const keys = keysRef.current;
 
     let prevArrowUp = false;
+    // useItemRef: allow React overlay to heal player
+    useItemRef.current = (itemId: string) => {
+      const item = getItem(itemId);
+      if (item && item.healAmount) {
+        player.hp = Math.min(MAX_HP, player.hp + item.healAmount);
+        for (let i = 0; i < 6; i++) spawnEmber(player.x + player.w / 2, player.y + player.h / 2, '#4ade80');
+        tryVibrate(15);
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'ArrowLeft') keys.ArrowLeft = true;
       if (e.code === 'ArrowRight') keys.ArrowRight = true;
       if (e.code === 'ArrowUp') keys.ArrowUp = true;
       if (e.code === 'Space') keys.Space = true;
+      if (e.code === 'KeyI' || e.code === 'Escape') {
+        setInventoryOpen(prev => !prev);
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'ArrowLeft') keys.ArrowLeft = false;
@@ -224,6 +266,12 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
     const worldH = level.rooms[0].grid.length * T;
 
     const update = () => {
+      // Pause when inventory is open
+      if (pausedRef.current) {
+        animationFrameId = requestAnimationFrame(update);
+        return;
+      }
+
       const frozen = hitStopTimer > 0;
       if (frozen) {
         hitStopTimer--;
@@ -243,8 +291,8 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         player.vy = -4; // cap upward velocity for short hops
       }
 
-      if (keys.ArrowLeft) { player.vx = -5; player.facingRight = false; }
-      else if (keys.ArrowRight) { player.vx = 5; player.facingRight = true; }
+      if (keys.ArrowLeft) { player.vx = -MOVE_SPEED; player.facingRight = false; }
+      else if (keys.ArrowRight) { player.vx = MOVE_SPEED; player.facingRight = true; }
       else { player.vx = 0; }
 
       // Coyote time tracking
@@ -308,7 +356,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
 
       // Fall off bottom = damage + respawn at last ground
       if (player.y > worldH + 50) {
-        player.hp -= 25;
+        player.hp -= Math.max(5, 25 - bonusDef * 3);
         player.invulnTimer = 60;
         // Respawn at bottom of current room
         const grid = level.rooms[currentRoomIdx].grid;
@@ -350,7 +398,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
             const hitY = e.y + e.h * 0.4;
             if (e.type === BlockType.BOSS) {
               if (e.weak) {
-                e.hp -= 1;
+                e.hp -= ATK_DAMAGE;
                 e.hitFlash = 8;
                 e.x += knockDir * 8;
                 e.vy = -3;
@@ -359,7 +407,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
                 didHitEnemy = true;
               }
             } else {
-              e.hp -= 1;
+              e.hp -= ATK_DAMAGE;
               e.hitFlash = 8;
               e.x += knockDir * 20;
               e.vy = -4;
@@ -544,7 +592,7 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
         for (const e of enemies) if (checkCol(hurtBox, e)) hit = true;
         for (const p of projectiles) if (checkCol(hurtBox, p)) hit = true;
         if (hit) {
-          player.hp -= 20;
+          player.hp -= Math.max(5, 20 - bonusDef * 3);
           player.invulnTimer = 60;
           player.vy = -8;
           player.vx = player.facingRight ? -5 : 5;
@@ -557,16 +605,25 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       }
       if (player.invulnTimer > 0) player.invulnTimer--;
 
-      // Potion pickup
+      // Potion pickup → goes to inventory
       for (let i = potions.length - 1; i >= 0; i--) {
         if (checkCol(player, potions[i])) {
-          const healAmt = 30;
-          player.hp = Math.min(MAX_HP, player.hp + healAmt);
           const pt = potions[i];
           for (let j = 0; j < 8; j++) spawnEmber(pt.x + pt.w / 2, pt.y + pt.h / 2, '#4ade80');
           spawnHitSparks(pt.x + pt.w / 2, pt.y + pt.h / 2, 6);
           potions.splice(i, 1);
           tryVibrate(15);
+          // Add to picked up items
+          const existing = pickedUpItemsRef.current.find(it => it.itemId === 'hp_potion_s');
+          if (existing) existing.quantity++;
+          else pickedUpItemsRef.current.push({ itemId: 'hp_potion_s', quantity: 1 });
+          // Update in-game inventory for UI
+          setInGameInventory(prev => {
+            const copy = prev.map(i => ({ ...i }));
+            const ex = copy.find(i => i.itemId === 'hp_potion_s');
+            if (ex) { ex.quantity++; return copy; }
+            return [...copy, { itemId: 'hp_potion_s', quantity: 1 }];
+          });
         }
       }
 
@@ -578,12 +635,12 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
           transitionTimer = 40;
           cameraY = worldH - GAME_H; // start camera at bottom
         } else {
-          onWin();
+          onWin(pickedUpItemsRef.current);
           return;
         }
       }
 
-      if (player.hp <= 0) { onLose(); return; }
+      if (player.hp <= 0) { onLose(pickedUpItemsRef.current); return; }
 
       } // end of !frozen physics block
 
@@ -1018,7 +1075,30 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
       window.removeEventListener('keyup', handleKeyUp);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [level, onWin, onLose]);
+  }, [level, onWin, onLose, stats.equipment]);
+
+  // Sync pause state
+  useEffect(() => {
+    pausedRef.current = inventoryOpen;
+  }, [inventoryOpen]);
+
+  const handleUseItemInGame = (itemId: string) => {
+    // Apply heal via ref
+    useItemRef.current?.(itemId);
+    // Decrement from in-game inventory
+    setInGameInventory(prev => {
+      const copy = prev.map(i => ({ ...i }));
+      const item = copy.find(i => i.itemId === itemId);
+      if (item) item.quantity--;
+      return copy.filter(i => i.quantity > 0);
+    });
+    // Also decrement from persistent inventory
+    const newInv = stats.inventory.map(i => {
+      if (i.itemId === itemId) return { ...i, quantity: i.quantity - 1 };
+      return { ...i };
+    }).filter(i => i.quantity > 0);
+    onSaveInventory(newInv);
+  };
 
   return (
     <motion.div
@@ -1062,31 +1142,51 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
 
       {!isMobile && (
         <p className="mt-2 text-[#5a4d3e] font-medieval text-xs tracking-wide z-10">
-          이동: ← → | 점프: ↑ | 공격: Space
+          이동: ← → | 점프: ↑ | 공격: Space | 보관함: I
         </p>
       )}
 
+      {/* Inventory button (top-right, both mobile and desktop) */}
+      <button
+        onClick={() => setInventoryOpen(true)}
+        className="fixed top-3 right-3 z-50 w-10 h-10 rounded-lg bg-[#1a1510]/80 border border-[#3d3630]/50 flex items-center justify-center text-[#d4a017] text-lg hover:border-[#5a4d3e] transition-all"
+      >
+        🎒
+      </button>
+
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end pl-2 pr-4 z-50 pointer-events-none select-none"
-          style={{ paddingBottom: 'max(28px, calc(env(safe-area-inset-bottom) + 16px))' }}
-        >
-          <div className="flex gap-1 items-end pointer-events-auto">
+        <>
+          {/* Left D-pad: fixed to bottom-left corner */}
+          <div className="fixed z-50 pointer-events-auto select-none flex gap-0 items-end"
+            style={{ left: '12px', bottom: 'max(20px, calc(env(safe-area-inset-bottom) + 12px))' }}
+          >
             <button
-              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
+              className="w-[80px] h-[80px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = false; }}
               onTouchCancel={() => { keysRef.current.ArrowLeft = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >←</button>
             <button
-              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
+              className="w-[80px] h-[80px] rounded-2xl btn-medieval text-[#d4a017] text-3xl font-bold active:scale-90 transition-all flex items-center justify-center opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowRight = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowRight = false; }}
               onTouchCancel={() => { keysRef.current.ArrowRight = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >→</button>
           </div>
-          <div className="flex gap-3 items-end pointer-events-auto">
+
+          {/* Right action buttons: fixed to bottom-right corner, JUMP bigger */}
+          <div className="fixed z-50 pointer-events-auto select-none flex gap-1 items-end"
+            style={{ right: '12px', bottom: 'max(20px, calc(env(safe-area-inset-bottom) + 12px))' }}
+          >
+            <button
+              className="w-[72px] h-[72px] rounded-2xl btn-medieval text-[#cc2200] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
+              onTouchStart={(e) => { e.preventDefault(); keysRef.current.Space = true; }}
+              onTouchEnd={(e) => { e.preventDefault(); keysRef.current.Space = false; }}
+              onTouchCancel={() => { keysRef.current.Space = false; }}
+              onContextMenu={(e) => e.preventDefault()}
+            >ATK</button>
             <button
               className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#38bdf8] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowUp = true; }}
@@ -1094,15 +1194,19 @@ export function GameCanvas({ level, onWin, onLose, onQuit }: Props) {
               onTouchCancel={() => { keysRef.current.ArrowUp = false; }}
               onContextMenu={(e) => e.preventDefault()}
             >JUMP</button>
-            <button
-              className="w-[88px] h-[88px] rounded-2xl btn-medieval text-[#cc2200] text-sm font-bold active:scale-90 transition-all flex items-center justify-center font-medieval opacity-70 active:opacity-100"
-              onTouchStart={(e) => { e.preventDefault(); keysRef.current.Space = true; }}
-              onTouchEnd={(e) => { e.preventDefault(); keysRef.current.Space = false; }}
-              onTouchCancel={() => { keysRef.current.Space = false; }}
-              onContextMenu={(e) => e.preventDefault()}
-            >ATK</button>
           </div>
-        </div>
+        </>
+      )}
+
+      {/* Inventory overlay */}
+      {inventoryOpen && (
+        <InventoryPanel
+          inventory={inGameInventory}
+          equipment={stats.equipment}
+          onUseItem={handleUseItemInGame}
+          onClose={() => setInventoryOpen(false)}
+          mode="ingame"
+        />
       )}
     </motion.div>
   );

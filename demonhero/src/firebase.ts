@@ -42,6 +42,8 @@ async function createUserProfile(user: { uid: string; displayName: string | null
       email: user.email || '',
       fame: 100,
       infamy: 100,
+      inventory: JSON.stringify([{ itemId: 'hp_potion_s', quantity: 3 }]),
+      equipment: JSON.stringify({ weapon: null, armor: null, boots: null }),
       createdAt: new Date().toISOString()
     });
   }

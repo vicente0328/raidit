@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Faction, LevelData, PlayerStats, RoomData } from './types';
+import { Faction, LevelData, PlayerStats, RoomData, InventoryItem, EquipSlot, Equipment } from './types';
 import { Home } from './components/Home';
 import { HeroDashboard } from './components/HeroDashboard';
 import { DemonDashboard } from './components/DemonDashboard';
@@ -8,7 +8,10 @@ import { GameCanvas } from './components/GameCanvas';
 import { createFloorGrid } from './utils';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc, increment, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc, increment, query, orderBy } from 'firebase/firestore';
+import { rollReward, getItem, RARITY_COLORS } from './items';
+
+const DEFAULT_EQUIPMENT: Equipment = { weapon: null, armor: null, boots: null };
 
 const DEFAULT_LEVEL: LevelData = {
   id: 'default-1',
@@ -50,14 +53,38 @@ async function testConnection() {
 }
 testConnection();
 
+// Helper to add item to inventory array
+function addToInventory(inv: InventoryItem[], itemId: string, qty: number = 1): InventoryItem[] {
+  const copy = inv.map(i => ({ ...i }));
+  const existing = copy.find(i => i.itemId === itemId);
+  if (existing) {
+    existing.quantity += qty;
+  } else {
+    copy.push({ itemId, quantity: qty });
+  }
+  return copy;
+}
+
+// Helper to remove item from inventory
+function removeFromInventory(inv: InventoryItem[], itemId: string, qty: number = 1): InventoryItem[] {
+  return inv.map(i => {
+    if (i.itemId === itemId) return { ...i, quantity: i.quantity - qty };
+    return { ...i };
+  }).filter(i => i.quantity > 0);
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
   const [faction, setFaction] = useState<Faction>(null);
-  const [stats, setStats] = useState<PlayerStats>({ fame: 100, infamy: 100 });
+  const [stats, setStats] = useState<PlayerStats>({
+    fame: 100, infamy: 100,
+    inventory: [],
+    equipment: DEFAULT_EQUIPMENT
+  });
   const [levels, setLevels] = useState<LevelData[]>([DEFAULT_LEVEL]);
   const [currentLevel, setCurrentLevel] = useState<LevelData | null>(null);
   const [editingLevel, setEditingLevel] = useState<LevelData | null>(null);
-  const [gameResult, setGameResult] = useState<{ win: boolean, fameChange: number } | null>(null);
+  const [gameResult, setGameResult] = useState<{ win: boolean; fameChange: number; rewardItemId?: string } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
@@ -73,16 +100,23 @@ export default function App() {
     if (!isAuthReady) return;
 
     if (user) {
-      // Listen to user stats
       const userRef = doc(db, 'users', user.uid);
       const unsubUser = onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setStats({ fame: data.fame || 0, infamy: data.infamy || 0 });
+          let inventory: InventoryItem[] = [];
+          let equipment: Equipment = DEFAULT_EQUIPMENT;
+          try { inventory = data.inventory ? JSON.parse(data.inventory) : []; } catch {}
+          try { equipment = data.equipment ? JSON.parse(data.equipment) : DEFAULT_EQUIPMENT; } catch {}
+          setStats({
+            fame: data.fame || 0,
+            infamy: data.infamy || 0,
+            inventory,
+            equipment,
+          });
         }
       }, (error) => handleFirestoreError(error, OperationType.GET, 'users'));
 
-      // Listen to levels
       const levelsQuery = query(collection(db, 'levels'), orderBy('createdAt', 'desc'));
       const unsubLevels = onSnapshot(levelsQuery, (snapshot) => {
         const fetchedLevels: LevelData[] = [];
@@ -102,16 +136,36 @@ export default function App() {
         setLevels(fetchedLevels.length > 0 ? fetchedLevels : [DEFAULT_LEVEL]);
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'levels'));
 
-      return () => {
-        unsubUser();
-        unsubLevels();
-      };
+      return () => { unsubUser(); unsubLevels(); };
     } else {
-      setStats({ fame: 100, infamy: 100 });
+      setStats({ fame: 100, infamy: 100, inventory: [], equipment: DEFAULT_EQUIPMENT });
       setLevels([DEFAULT_LEVEL]);
     }
   }, [user, isAuthReady]);
 
+  // === Inventory Helpers ===
+  const saveInventoryToFirestore = async (newInventory: InventoryItem[], newEquipment?: Equipment) => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    const update: Record<string, string> = { inventory: JSON.stringify(newInventory) };
+    if (newEquipment) update.equipment = JSON.stringify(newEquipment);
+    await updateDoc(userRef, update);
+  };
+
+  const handleEquipItem = async (itemId: string) => {
+    const item = getItem(itemId);
+    if (!item || item.type === 'consumable') return;
+    const slot = item.type as EquipSlot;
+    const newEquip = { ...stats.equipment, [slot]: itemId };
+    await saveInventoryToFirestore(stats.inventory, newEquip);
+  };
+
+  const handleUnequipItem = async (slot: EquipSlot) => {
+    const newEquip = { ...stats.equipment, [slot]: null };
+    await saveInventoryToFirestore(stats.inventory, newEquip);
+  };
+
+  // === Game Handlers ===
   const handleSelectFaction = (f: Faction) => {
     setFaction(f);
     setScreen(f === 'hero' ? 'hero_dash' : 'demon_dash');
@@ -122,18 +176,30 @@ export default function App() {
     setScreen('play');
   };
 
-  const handleWin = async () => {
+  const handleWin = async (pickedUpItems: InventoryItem[]) => {
     if (!currentLevel || !user) return;
     const fameGained = Math.floor(currentLevel.infamy * 0.08);
-    setGameResult({ win: true, fameChange: fameGained });
+
+    // Roll a reward item
+    const rewardItemId = rollReward();
+
+    setGameResult({ win: true, fameChange: fameGained, rewardItemId });
     setScreen('result');
 
     try {
-      // Update hero fame
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { fame: increment(fameGained) });
+      // Build updated inventory: merge picked up items + reward
+      let newInventory = [...stats.inventory];
+      for (const pi of pickedUpItems) {
+        newInventory = addToInventory(newInventory, pi.itemId, pi.quantity);
+      }
+      newInventory = addToInventory(newInventory, rewardItemId, 1);
 
-      // Update level stats
+      await updateDoc(userRef, {
+        fame: increment(fameGained),
+        inventory: JSON.stringify(newInventory),
+      });
+
       const levelRef = doc(db, 'levels', currentLevel.id);
       await updateDoc(levelRef, {
         clears: increment(1),
@@ -141,7 +207,6 @@ export default function App() {
         infamy: Math.max(0, currentLevel.infamy - fameGained)
       });
 
-      // Update tower creator's infamy
       if (currentLevel.creatorId && currentLevel.creatorId !== user.uid && currentLevel.creatorId !== 'system') {
         const creatorRef = doc(db, 'users', currentLevel.creatorId);
         await updateDoc(creatorRef, { infamy: increment(-fameGained) });
@@ -151,7 +216,7 @@ export default function App() {
     }
   };
 
-  const handleLose = async () => {
+  const handleLose = async (pickedUpItems: InventoryItem[]) => {
     if (!currentLevel || !user) return;
     const rawLoss = Math.floor(currentLevel.infamy * 0.08);
     const fameLost = Math.min(rawLoss, stats.fame);
@@ -159,20 +224,27 @@ export default function App() {
     setScreen('result');
 
     try {
-      // Update hero fame
       const userRef = doc(db, 'users', user.uid);
-      if (fameLost > 0) {
+      // Items picked up are kept even on loss
+      if (pickedUpItems.length > 0) {
+        let newInventory = [...stats.inventory];
+        for (const pi of pickedUpItems) {
+          newInventory = addToInventory(newInventory, pi.itemId, pi.quantity);
+        }
+        await updateDoc(userRef, {
+          fame: fameLost > 0 ? increment(-fameLost) : increment(0),
+          inventory: JSON.stringify(newInventory),
+        });
+      } else if (fameLost > 0) {
         await updateDoc(userRef, { fame: increment(-fameLost) });
       }
 
-      // Update level stats
       const levelRef = doc(db, 'levels', currentLevel.id);
       await updateDoc(levelRef, {
         attempts: increment(1),
         infamy: increment(fameLost)
       });
 
-      // Update tower creator's infamy
       if (currentLevel.creatorId && currentLevel.creatorId !== user.uid && currentLevel.creatorId !== 'system') {
         const creatorRef = doc(db, 'users', currentLevel.creatorId);
         await updateDoc(creatorRef, { infamy: increment(fameLost) });
@@ -182,19 +254,23 @@ export default function App() {
     }
   };
 
+  // Use consumable from dashboard
+  const handleUseItemDashboard = async (itemId: string) => {
+    const item = getItem(itemId);
+    if (!item || item.type !== 'consumable') return;
+    const newInventory = removeFromInventory(stats.inventory, itemId);
+    await saveInventoryToFirestore(newInventory);
+  };
+
   const handleSaveLevel = async (rooms: RoomData[]) => {
     if (!user) throw new Error('Not authenticated');
-
     const levelId = `tower-${user.uid}`;
     const levelRef = doc(db, 'levels', levelId);
-
     try {
       const existingDoc = await getDoc(levelRef);
       if (existingDoc.exists()) {
-        // Update existing tower
         await updateDoc(levelRef, { rooms: JSON.stringify(rooms) });
       } else {
-        // Create new tower
         const newLevel = {
           id: levelId,
           name: `나의 마왕탑`,
@@ -230,7 +306,17 @@ export default function App() {
   }
 
   if (screen === 'hero_dash') {
-    return <HeroDashboard levels={levels} stats={stats} onPlay={handlePlay} onBack={() => setScreen('home')} />;
+    return (
+      <HeroDashboard
+        levels={levels}
+        stats={stats}
+        onPlay={handlePlay}
+        onBack={() => setScreen('home')}
+        onEquipItem={handleEquipItem}
+        onUnequipItem={handleUnequipItem}
+        onUseItem={handleUseItemDashboard}
+      />
+    );
   }
 
   const handleRenameTower = async (newName: string) => {
@@ -248,11 +334,21 @@ export default function App() {
   }
 
   if (screen === 'play' && currentLevel) {
-    return <GameCanvas level={currentLevel} onWin={handleWin} onLose={handleLose} onQuit={() => { setCurrentLevel(null); setScreen('hero_dash'); }} />;
+    return (
+      <GameCanvas
+        level={currentLevel}
+        stats={stats}
+        onWin={handleWin}
+        onLose={handleLose}
+        onQuit={() => { setCurrentLevel(null); setScreen('hero_dash'); }}
+        onSaveInventory={saveInventoryToFirestore}
+      />
+    );
   }
 
   if (screen === 'result' && gameResult) {
     const isWin = gameResult.win;
+    const rewardItem = gameResult.rewardItemId ? getItem(gameResult.rewardItemId) : null;
     return (
       <div className="min-h-[100dvh] bg-[#09090b] flex flex-col items-center justify-center text-[#e4e4e7] font-sans relative overflow-hidden p-4">
         <div className="absolute inset-0 pointer-events-none">
@@ -272,12 +368,22 @@ export default function App() {
           {isWin ? 'VICTORY' : 'DEFEATED'}
         </h1>
 
-        <div className="relative z-10 bg-[#18181b] border border-[#27272a] rounded-lg p-6 md:p-8 text-center mb-10 min-w-[220px]">
+        <div className="relative z-10 bg-[#18181b] border border-[#27272a] rounded-lg p-6 md:p-8 text-center mb-6 min-w-[220px]">
           <p className="text-[#52525b] text-[10px] uppercase tracking-[0.3em] mb-3">Fame Change</p>
           <p className={`text-4xl md:text-5xl font-display font-black ${gameResult.fameChange > 0 ? 'text-[#4ade80]' : 'text-[#f87171]'}`}>
             {gameResult.fameChange > 0 ? '+' : ''}{gameResult.fameChange}
           </p>
         </div>
+
+        {isWin && rewardItem && (
+          <div className="relative z-10 bg-[#18181b] border border-[#27272a] rounded-lg p-4 md:p-6 text-center mb-10 min-w-[220px]">
+            <p className="text-[#52525b] text-[10px] uppercase tracking-[0.3em] mb-2">보상 아이템</p>
+            <p className="text-lg font-display font-bold" style={{ color: RARITY_COLORS[rewardItem.rarity] }}>
+              {rewardItem.nameKo}
+            </p>
+            <p className="text-[11px] text-[#71717a] mt-1">{rewardItem.description}</p>
+          </div>
+        )}
 
         <button
           onClick={() => { setGameResult(null); setScreen('hero_dash'); }}

@@ -28,7 +28,36 @@ export interface LevelData {
   attempts: number;
 }
 
+export type EquipSlot = 'weapon' | 'armor' | 'boots';
+
+export interface ItemDef {
+  id: string;
+  name: string;
+  nameKo: string;
+  type: 'consumable' | 'weapon' | 'armor' | 'boots';
+  rarity: 'common' | 'rare' | 'epic';
+  description: string;
+  healAmount?: number;
+  atk?: number;
+  def?: number;
+  speed?: number;
+  maxHp?: number;
+}
+
+export interface InventoryItem {
+  itemId: string;
+  quantity: number;
+}
+
+export interface Equipment {
+  weapon: string | null;
+  armor: string | null;
+  boots: string | null;
+}
+
 export interface PlayerStats {
   fame: number;
   infamy: number;
+  inventory: InventoryItem[];
+  equipment: Equipment;
 }
