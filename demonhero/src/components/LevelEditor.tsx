@@ -67,7 +67,6 @@ export function LevelEditor({ onSave, onCancel }: Props) {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
       if (mobile) {
-        // Fit 10 columns in screen width
         const availW = window.innerWidth - 16;
         setCellSize(Math.floor(availW / TOWER_COLS));
       } else {
@@ -138,7 +137,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
 
   if (isTesting) {
     return (
-      <div className="relative w-full h-[100dvh] bg-[#0d0a07] overflow-hidden flex flex-col items-center justify-center">
+      <div className="relative w-full h-[100dvh] bg-[#09090b] overflow-hidden flex flex-col items-center justify-center">
         <GameCanvas
           level={{ id: 'test', name: '테스트 플레이', creator: '마왕 (테스트)', creatorId: 'test', infamy: 0, clears: 0, attempts: 0, rooms }}
           onWin={() => { setHasClearedTest(true); setIsTesting(false); setMessage({ text: '테스트 클리어! 이제 저장할 수 있습니다.', type: 'success' }); }}
@@ -146,7 +145,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
         />
         <button
           onClick={() => setIsTesting(false)}
-          className="absolute top-3 right-3 md:top-6 md:right-6 btn-medieval text-[#e8dcc8] px-4 py-2 md:px-6 md:py-3 rounded-xl font-medieval font-bold flex items-center gap-2 z-50 text-sm"
+          className="absolute top-3 right-3 md:top-6 md:right-6 bg-[#18181b] border border-[#27272a] text-[#a1a1aa] px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold flex items-center gap-2 z-50 text-sm hover:border-[#3f3f46] transition-colors"
         >
           <X className="w-4 h-4" /> 종료
         </button>
@@ -159,43 +158,40 @@ export function LevelEditor({ onSave, onCancel }: Props) {
     return (
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        className="flex flex-col h-[100dvh] bg-[#0d0a07] text-[#e8dcc8] font-sans overflow-hidden"
+        className="flex flex-col h-[100dvh] bg-[#09090b] text-[#e4e4e7] font-sans overflow-hidden"
       >
         {/* Top bar */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#3d3630]/50 bg-[#1a1510] shrink-0">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[#27272a] bg-[#111114] shrink-0">
           <div className="flex gap-1">
             {[0, 1, 2].map(i => (
               <button key={i} onClick={() => setCurrentRoom(i)}
-                className={`px-3 py-1.5 rounded-lg font-medieval font-bold text-xs tracking-wider transition-all ${
-                  currentRoom === i ? 'bg-[#4c1d95]/30 border border-[#7c3aed]/40 text-[#a78bfa]' : 'text-[#5a4d3e]'
+                className={`px-3 py-1.5 rounded-md font-semibold text-xs tracking-wider transition-all ${
+                  currentRoom === i ? 'bg-[#c084fc]/10 border border-[#c084fc]/25 text-[#c084fc]' : 'text-[#52525b]'
                 }`}
-              >{i + 1}층</button>
+              >{i + 1}F</button>
             ))}
           </div>
           <div className="flex gap-1.5">
-            <button onClick={handleTestPlay} className="btn-medieval text-[#38bdf8] px-3 py-1.5 rounded-lg font-medieval font-bold text-xs flex items-center gap-1">
-              <Play className="w-3.5 h-3.5" /> 테스트
+            <button onClick={handleTestPlay} className="btn-surface text-[#22d3ee] px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1">
+              <Play className="w-3.5 h-3.5" /> Test
             </button>
             <button onClick={handleSave} disabled={!hasClearedTest}
-              className={`px-3 py-1.5 rounded-lg font-medieval font-bold text-xs flex items-center gap-1 ${hasClearedTest ? 'btn-medieval text-[#7c3aed]' : 'bg-[#1a1510] border border-[#2a2520] text-[#3d3630]'}`}
-            ><Save className="w-3.5 h-3.5" /> 저장</button>
-            <button onClick={onCancel} className="btn-medieval text-[#8b7355] px-2 py-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+              className={`px-3 py-1.5 rounded-md font-semibold text-xs flex items-center gap-1 ${hasClearedTest ? 'btn-surface text-[#4ade80]' : 'bg-[#111114] border border-[#1f1f23] text-[#27272a]'}`}
+            ><Save className="w-3.5 h-3.5" /> Save</button>
+            <button onClick={onCancel} className="btn-surface text-[#71717a] px-2 py-1.5 rounded-md"><X className="w-4 h-4" /></button>
           </div>
         </div>
 
         {message && (
-          <div className={`mx-3 mt-2 p-2 rounded-lg text-xs font-medieval font-bold text-center ${
-            message.type === 'error' ? 'bg-[#8b0000]/15 text-[#cc2200] border border-[#8b0000]/30' : 'bg-[#166534]/15 text-[#4ade80] border border-[#166534]/30'
+          <div className={`mx-3 mt-2 p-2 rounded-md text-xs font-semibold text-center ${
+            message.type === 'error' ? 'bg-[#f87171]/[0.08] text-[#f87171] border border-[#f87171]/20' : 'bg-[#4ade80]/[0.08] text-[#4ade80] border border-[#4ade80]/20'
           }`}>{message.text}</div>
         )}
 
-        {/* Vertical scrollable grid */}
-        <div
-          ref={gridContainerRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-2"
-        >
+        {/* Grid */}
+        <div ref={gridContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden flex justify-center py-2">
           <div
-            className="border border-[#3d3630]/50 bg-[#0d0a07]/80"
+            className="border border-[#27272a] bg-[#09090b]"
             style={{
               display: 'grid',
               gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)`,
@@ -207,7 +203,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
               row.map((cell, c) => (
                 <div
                   key={`${r}-${c}`}
-                  className={`border-r border-b border-[#2a2520]/30 ${cell === BlockType.EMPTY ? 'bg-transparent' : 'bg-center bg-no-repeat bg-cover'}`}
+                  className={`border-r border-b border-[#1f1f23] ${cell === BlockType.EMPTY ? 'bg-transparent' : 'bg-center bg-no-repeat bg-cover'}`}
                   style={{
                     width: cellSize, height: cellSize,
                     ...(cell !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[cell as BlockType]})` } : {}),
@@ -219,24 +215,22 @@ export function LevelEditor({ onSave, onCancel }: Props) {
         </div>
 
         {/* Bottom palette */}
-        <div className="shrink-0 border-t border-[#3d3630]/50 bg-[#1a1510]" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-          {/* Draw mode toggle + palette toggle */}
+        <div className="shrink-0 border-t border-[#27272a] bg-[#111114]" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
           <div className="flex items-center px-3 py-1.5 gap-2">
-            <button
-              onClick={() => setDrawMode(!drawMode)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-medieval font-bold text-xs transition-all ${
+            <button onClick={() => setDrawMode(!drawMode)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-md font-semibold text-xs transition-all ${
                 drawMode
-                  ? 'bg-[#7c3aed]/30 border border-[#7c3aed]/60 text-[#a78bfa]'
-                  : 'bg-[#0d0a07]/50 border border-[#3d3630]/30 text-[#5a4d3e]'
+                  ? 'bg-[#c084fc]/15 border border-[#c084fc]/30 text-[#c084fc]'
+                  : 'bg-[#18181b] border border-[#27272a] text-[#52525b]'
               }`}
             >
-              {drawMode ? '✏️ 그리기 ON' : '👆 스크롤'}
+              {drawMode ? 'Draw ON' : 'Scroll'}
             </button>
             <button onClick={() => setShowPalette(!showPalette)}
-              className="flex-1 flex items-center justify-center gap-2 text-[#5a4d3e] text-xs font-medieval"
+              className="flex-1 flex items-center justify-center gap-2 text-[#52525b] text-xs"
             >
               {showPalette ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-              {BLOCK_NAMES[selectedBlock]} 선택됨
+              {BLOCK_NAMES[selectedBlock]}
             </button>
           </div>
 
@@ -247,11 +241,11 @@ export function LevelEditor({ onSave, onCancel }: Props) {
                 const isSelected = selectedBlock === typeNum;
                 return (
                   <button key={type} onClick={() => { setSelectedBlock(typeNum); setShowPalette(false); }}
-                    className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${isSelected ? 'bg-[#4c1d95]/30 border border-[#7c3aed]/50' : 'bg-[#0d0a07]/50 border border-[#3d3630]/30'}`}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${isSelected ? 'bg-[#c084fc]/10 border border-[#c084fc]/30' : 'bg-[#18181b] border border-[#27272a]'}`}
                   >
-                    <div className={`w-8 h-8 rounded-md flex-shrink-0 ${typeNum === BlockType.EMPTY ? 'border border-dashed border-[#5a4d3e]' : 'bg-center bg-no-repeat bg-cover'}`}
+                    <div className={`w-8 h-8 rounded flex-shrink-0 ${typeNum === BlockType.EMPTY ? 'border border-dashed border-[#3f3f46]' : 'bg-center bg-no-repeat bg-cover'}`}
                       style={typeNum !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : undefined} />
-                    <span className="font-medieval text-[10px] text-[#c4a882] leading-tight">{name}</span>
+                    <span className="text-[10px] text-[#71717a] leading-tight">{name}</span>
                   </button>
                 );
               })}
@@ -265,12 +259,12 @@ export function LevelEditor({ onSave, onCancel }: Props) {
                 const isSelected = selectedBlock === typeNum;
                 return (
                   <button key={type} onClick={() => setSelectedBlock(typeNum)}
-                    className={`flex-shrink-0 w-10 h-10 rounded-lg transition-all ${
-                      isSelected ? 'bg-[#4c1d95]/30 border-2 border-[#7c3aed]/60 scale-110' : 'bg-[#0d0a07]/50 border border-[#3d3630]/30'
+                    className={`flex-shrink-0 w-10 h-10 rounded-md transition-all ${
+                      isSelected ? 'bg-[#c084fc]/10 border-2 border-[#c084fc]/40 scale-110' : 'bg-[#18181b] border border-[#27272a]'
                     } ${typeNum === BlockType.EMPTY ? '' : 'bg-center bg-no-repeat bg-cover'}`}
                     style={typeNum !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : undefined}
                   >
-                    {typeNum === BlockType.EMPTY && <span className="text-[#5a4d3e] text-lg">✕</span>}
+                    {typeNum === BlockType.EMPTY && <span className="text-[#52525b] text-lg">+</span>}
                   </button>
                 );
               })}
@@ -285,75 +279,73 @@ export function LevelEditor({ onSave, onCancel }: Props) {
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="flex h-screen bg-[#0d0a07] text-[#e8dcc8] font-sans overflow-hidden"
+      className="flex h-screen bg-[#09090b] text-[#e4e4e7] font-sans overflow-hidden"
     >
       {/* Sidebar */}
-      <div className="w-72 md:w-80 border-r border-[#3d3630]/50 bg-gradient-to-b from-[#1a1510] to-[#0d0a07] p-5 flex flex-col z-10 relative">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#7c3aed]/30 to-transparent"></div>
-
-        <h2 className="text-xl font-display font-black text-[#7c3aed] mb-6 flex items-center gap-3 tracking-widest glow-royal">
-          <Layers className="w-5 h-5" /> 마왕탑 설계
+      <div className="w-64 md:w-72 border-r border-[#27272a] bg-[#111114] p-5 flex flex-col z-10">
+        <h2 className="text-lg font-display font-black text-[#fafafa] mb-5 flex items-center gap-2.5 tracking-wider">
+          <Layers className="w-4.5 h-4.5 text-[#c084fc]" /> Tower Editor
         </h2>
 
-        <div className="space-y-2 flex-1 overflow-y-auto pr-1 custom-scrollbar">
-          <p className="text-[10px] font-bold text-[#5a4d3e] uppercase tracking-[0.2em] mb-3 font-medieval">건축 자재</p>
+        <div className="space-y-1 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          <p className="text-[10px] font-semibold text-[#52525b] uppercase tracking-[0.15em] mb-2">Blocks</p>
           {Object.entries(BLOCK_NAMES_FULL).map(([type, name]) => {
             const typeNum = Number(type);
             const isSelected = selectedBlock === typeNum;
             return (
               <button key={type} onClick={() => setSelectedBlock(typeNum)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
-                  isSelected ? 'bg-[#4c1d95]/20 border border-[#7c3aed]/50 shadow-[0_0_12px_rgba(124,58,237,0.15)]' : 'bg-transparent border border-transparent hover:border-[#3d3630]/50 hover:bg-[#1a1510]'
+                className={`w-full flex items-center gap-3 p-2.5 rounded-lg transition-all duration-150 ${
+                  isSelected ? 'bg-[#c084fc]/10 border border-[#c084fc]/25' : 'bg-transparent border border-transparent hover:bg-[#18181b] hover:border-[#27272a]'
                 }`}
               >
-                <div className={`w-8 h-8 rounded-md shadow-inner flex-shrink-0 ${typeNum === BlockType.EMPTY ? 'border border-dashed border-[#5a4d3e]' : 'bg-center bg-no-repeat bg-cover'}`}
+                <div className={`w-7 h-7 rounded flex-shrink-0 ${typeNum === BlockType.EMPTY ? 'border border-dashed border-[#3f3f46]' : 'bg-center bg-no-repeat bg-cover'}`}
                   style={typeNum !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : undefined} />
-                <span className="font-medieval font-bold text-sm text-[#c4a882] tracking-wide">{name}</span>
+                <span className="font-medium text-sm text-[#a1a1aa]">{name}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="mt-6 space-y-2 pt-5 border-t border-[#3d3630]/50">
+        <div className="mt-5 space-y-2 pt-4 border-t border-[#27272a]">
           {message && (
-            <div className={`p-3 rounded-xl text-xs font-medieval font-bold text-center mb-3 ${
-              message.type === 'error' ? 'bg-[#8b0000]/15 text-[#cc2200] border border-[#8b0000]/30' : 'bg-[#166534]/15 text-[#4ade80] border border-[#166534]/30'
+            <div className={`p-2.5 rounded-lg text-xs font-semibold text-center mb-2 ${
+              message.type === 'error' ? 'bg-[#f87171]/[0.08] text-[#f87171] border border-[#f87171]/20' : 'bg-[#4ade80]/[0.08] text-[#4ade80] border border-[#4ade80]/20'
             }`}>{message.text}</div>
           )}
-          <button onClick={handleTestPlay} className="w-full btn-medieval text-[#38bdf8] py-3.5 rounded-xl font-medieval font-bold text-sm flex items-center justify-center gap-2 transition-all">
-            <Play className="w-4 h-4" /> 테스트 플레이
+          <button onClick={handleTestPlay} className="w-full bg-[#22d3ee]/[0.08] hover:bg-[#22d3ee]/[0.15] border border-[#22d3ee]/15 hover:border-[#22d3ee]/30 text-[#22d3ee] py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all">
+            <Play className="w-4 h-4" /> Test Play
           </button>
           <button onClick={handleSave} disabled={!hasClearedTest}
-            className={`w-full py-3.5 rounded-xl font-medieval font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-              hasClearedTest ? 'btn-medieval text-[#7c3aed]' : 'bg-[#1a1510] border-2 border-[#2a2520] text-[#3d3630] cursor-not-allowed'
+            className={`w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              hasClearedTest ? 'bg-[#4ade80]/[0.08] hover:bg-[#4ade80]/[0.15] border border-[#4ade80]/15 hover:border-[#4ade80]/30 text-[#4ade80]' : 'bg-[#111114] border border-[#1f1f23] text-[#27272a] cursor-not-allowed'
             }`}
-          ><Save className="w-4 h-4" /> 저장 및 오픈</button>
-          <button onClick={onCancel} className="w-full btn-medieval text-[#8b7355] py-3.5 rounded-xl font-medieval font-bold text-sm flex items-center justify-center gap-2">
-            <X className="w-4 h-4" /> 취소
+          ><Save className="w-4 h-4" /> Save & Publish</button>
+          <button onClick={onCancel} className="w-full bg-[#18181b] hover:bg-[#1f1f23] border border-[#27272a] hover:border-[#3f3f46] text-[#71717a] py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all">
+            <X className="w-4 h-4" /> Cancel
           </button>
         </div>
       </div>
 
-      {/* Main Editor Area — vertical tower with scrolling */}
-      <div className="flex-1 flex flex-col items-center relative bg-dungeon overflow-hidden">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(90,77,62,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(90,77,62,0.05)_1px,transparent_1px)] bg-[size:36px_36px] pointer-events-none"></div>
+      {/* Main Editor */}
+      <div className="flex-1 flex flex-col items-center relative bg-[#09090b] overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(39,39,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(39,39,42,0.06)_1px,transparent_1px)] bg-[size:36px_36px] pointer-events-none"></div>
 
-        {/* Room tabs */}
-        <div className="mt-4 flex gap-1 card-stone p-1.5 rounded-xl z-10 shrink-0">
+        {/* Floor tabs */}
+        <div className="mt-4 flex gap-1 bg-[#111114] border border-[#27272a] p-1 rounded-lg z-10 shrink-0">
           {[0, 1, 2].map(i => (
             <button key={i} onClick={() => setCurrentRoom(i)}
-              className={`px-6 py-2.5 rounded-lg font-medieval font-bold text-sm tracking-widest transition-all duration-200 ${
-                currentRoom === i ? 'bg-[#4c1d95]/20 border border-[#7c3aed]/40 text-[#a78bfa] shadow-[0_0_8px_rgba(124,58,237,0.2)]' : 'bg-transparent text-[#5a4d3e] hover:text-[#8b7355] hover:bg-[#1a1510]'
+              className={`px-5 py-2 rounded-md font-semibold text-sm tracking-wider transition-all duration-150 ${
+                currentRoom === i ? 'bg-[#c084fc]/10 border border-[#c084fc]/25 text-[#c084fc]' : 'bg-transparent text-[#52525b] hover:text-[#71717a]'
               }`}
-            >{i + 1}층</button>
+            >{i + 1}F</button>
           ))}
         </div>
 
-        {/* Scrollable tower grid */}
+        {/* Grid */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 z-10 custom-scrollbar">
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2 }}
-            className="border border-[#3d3630]/50 bg-[#0d0a07]/80 rounded-lg overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)]"
+            initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.15 }}
+            className="border border-[#27272a] bg-[#09090b] rounded-md overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.4)]"
             style={{ display: 'grid', gridTemplateColumns: `repeat(${TOWER_COLS}, ${cellSize}px)` }}
             onMouseLeave={() => setIsDragging(false)}
             onMouseUp={() => setIsDragging(false)}
@@ -365,8 +357,8 @@ export function LevelEditor({ onSave, onCancel }: Props) {
                   onMouseDown={(e) => { e.preventDefault(); setIsDragging(true); handleCellAction(r, c); }}
                   onMouseEnter={() => { if (isDragging) handleCellAction(r, c); }}
                   onDragStart={(e) => e.preventDefault()}
-                  className={`border-r border-b border-[#2a2520]/40 cursor-crosshair transition-colors duration-75 ${
-                    cell === BlockType.EMPTY ? 'bg-transparent hover:bg-[#2a2520]/40' : 'bg-center bg-no-repeat bg-cover'
+                  className={`border-r border-b border-[#1f1f23] cursor-crosshair transition-colors duration-75 ${
+                    cell === BlockType.EMPTY ? 'bg-transparent hover:bg-[#18181b]' : 'bg-center bg-no-repeat bg-cover'
                   }`}
                   style={{
                     width: cellSize, height: cellSize,
@@ -378,7 +370,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
           </motion.div>
         </div>
 
-        <p className="pb-4 text-[#5a4d3e] font-medieval text-sm tracking-wide z-10 shrink-0">드래그하여 블록을 배치 · 스크롤하여 탑 전체를 편집</p>
+        <p className="pb-4 text-[#3f3f46] text-sm z-10 shrink-0">Drag to place blocks</p>
       </div>
     </motion.div>
   );
