@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { LevelData, BlockType } from '../types';
 import { motion } from 'motion/react';
 import { SPRITES } from '../sprites';
@@ -9,14 +9,20 @@ interface Props {
   onLose: () => void;
 }
 
+// Ember particle system
+interface Ember {
+  x: number; y: number; vx: number; vy: number;
+  life: number; maxLife: number; size: number;
+  color: string;
+}
+
 export function GameCanvas({ level, onWin, onLose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef({ ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false });
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const check = () => setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    check();
+    setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
   useEffect(() => {
@@ -31,7 +37,14 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
 
     let animationFrameId: number;
     let currentRoomIdx = 0;
-    
+    let frameCount = 0;
+
+    // Ember particles
+    let embers: Ember[] = [];
+
+    // Slash trail particles (Dead Cells style)
+    let slashTrails: { x: number; y: number; angle: number; life: number; size: number }[] = [];
+
     let player = {
       x: 40, y: 40, w: 24, h: 32,
       vx: 0, vy: 0,
@@ -52,6 +65,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       spikes = [];
       enemies = [];
       door = null;
+      embers = [];
       const grid = level.rooms[idx].grid;
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -60,9 +74,9 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           let y = r * TILE_SIZE;
           if (val === BlockType.WALL) walls.push({ x, y, w: TILE_SIZE, h: TILE_SIZE });
           if (val === BlockType.SPIKE) spikes.push({ x, y: y + 20, w: TILE_SIZE, h: 20 });
-          if (val === BlockType.MOB_PATROL) enemies.push({ x, y: y + 8, w: 32, h: 32, type: val, hp: 2, vx: 2, vy: 0, startX: x });
-          if (val === BlockType.MOB_STATIONARY) enemies.push({ x, y: y + 8, w: 32, h: 32, type: val, hp: 3, vx: 0, vy: 0 });
-          if (val === BlockType.BOSS) enemies.push({ x, y: y - 24, w: 64, h: 64, type: val, hp: 10, vx: 0, vy: 0, timer: 0, weak: false });
+          if (val === BlockType.MOB_PATROL) enemies.push({ x, y: y + 8, w: 32, h: 32, type: val, hp: 2, maxHp: 2, vx: 2, vy: 0, startX: x, hitFlash: 0 });
+          if (val === BlockType.MOB_STATIONARY) enemies.push({ x, y: y + 8, w: 32, h: 32, type: val, hp: 3, maxHp: 3, vx: 0, vy: 0, hitFlash: 0 });
+          if (val === BlockType.BOSS) enemies.push({ x, y: y - 24, w: 64, h: 64, type: val, hp: 10, maxHp: 10, vx: 0, vy: 0, timer: 0, weak: false, hitFlash: 0 });
           if (val === BlockType.DOOR) door = { x, y, w: TILE_SIZE, h: TILE_SIZE };
           if (val === BlockType.SPAWN) { player.x = x + 8; player.y = y + 8; }
         }
@@ -96,9 +110,37 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
              r1.y + r1.h > r2.y;
     };
 
+    // Spawn ember particles
+    const spawnEmber = (x: number, y: number, color?: string) => {
+      embers.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: -Math.random() * 2 - 0.5,
+        life: 60 + Math.random() * 40,
+        maxLife: 100,
+        size: 1 + Math.random() * 2,
+        color: color || (Math.random() > 0.5 ? '#d4a017' : '#c2410c')
+      });
+    };
+
+    // Spawn slash effect (Dead Cells style)
+    const spawnSlash = (x: number, y: number, facingRight: boolean) => {
+      for (let i = 0; i < 5; i++) {
+        slashTrails.push({
+          x: x + (Math.random() - 0.5) * 10,
+          y: y + (Math.random() - 0.5) * 20,
+          angle: facingRight ? Math.random() * 0.8 - 0.4 : Math.PI + Math.random() * 0.8 - 0.4,
+          life: 8 + Math.random() * 6,
+          size: 15 + Math.random() * 15
+        });
+      }
+    };
+
     const update = () => {
+      frameCount++;
+
       player.vy += 0.6;
-      
+
       if (keys.ArrowLeft) { player.vx = -5; player.facingRight = false; }
       else if (keys.ArrowRight) { player.vx = 5; player.facingRight = true; }
       else { player.vx = 0; }
@@ -130,7 +172,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           player.vy = 0;
         }
       }
-      
+
       if (player.y > 480) player.hp = 0;
 
       if (keys.Space && player.attackTimer <= 0) {
@@ -141,14 +183,29 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
           w: 30,
           h: player.h
         };
-        
+
+        // Spawn slash visual
+        spawnSlash(
+          player.facingRight ? player.x + player.w + 10 : player.x - 10,
+          player.y + player.h / 2,
+          player.facingRight
+        );
+
         for (let e of enemies) {
           if (checkCol(hitBox, e)) {
             if (e.type === BlockType.BOSS) {
-              if (e.weak) e.hp -= 1;
+              if (e.weak) {
+                e.hp -= 1;
+                e.hitFlash = 8;
+                // Hit sparks
+                for (let i = 0; i < 8; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
+              }
             } else {
               e.hp -= 1;
+              e.hitFlash = 8;
               e.x += player.facingRight ? 10 : -10;
+              // Hit sparks
+              for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
             }
           }
         }
@@ -158,15 +215,19 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
       for (let i = enemies.length - 1; i >= 0; i--) {
         let e = enemies[i];
         if (e.hp <= 0) {
+          // Death burst particles
+          for (let j = 0; j < 15; j++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#7c3aed');
           enemies.splice(i, 1);
           continue;
         }
-        
+
+        if (e.hitFlash > 0) e.hitFlash--;
+
         if (e.type === BlockType.MOB_PATROL) {
           e.x += e.vx;
           if (Math.abs(e.x - e.startX) > 80) e.vx *= -1;
         }
-        
+
         if (e.type === BlockType.BOSS) {
           e.timer++;
           if (e.timer > 120) {
@@ -180,12 +241,14 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         let hit = false;
         for (let s of spikes) if (checkCol(player, s)) hit = true;
         for (let e of enemies) if (checkCol(player, e)) hit = true;
-        
+
         if (hit) {
           player.hp -= 1;
           player.invulnTimer = 60;
           player.vy = -6;
           player.vx = player.facingRight ? -5 : 5;
+          // Blood particles
+          for (let i = 0; i < 8; i++) spawnEmber(player.x + player.w / 2, player.y + player.h / 2, '#cc2200');
         }
       }
       if (player.invulnTimer > 0) player.invulnTimer--;
@@ -205,20 +268,46 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         return;
       }
 
-      // Draw Background
-      ctx.fillStyle = '#050505';
+      // === RENDER ===
+
+      // Dark dungeon background
+      ctx.fillStyle = '#0d0a07';
       ctx.fillRect(0, 0, 800, 480);
 
-      // Draw Grid
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-      ctx.lineWidth = 1;
-      for(let i=0; i<=800; i+=40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 480); ctx.stroke(); }
-      for(let i=0; i<=480; i+=40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(800, i); ctx.stroke(); }
+      // Draw stone floor tiles for empty spaces
+      const grid = level.rooms[currentRoomIdx].grid;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const val = grid[r][c];
+          if (val === BlockType.EMPTY || val === BlockType.MOB_PATROL || val === BlockType.MOB_STATIONARY || val === BlockType.BOSS || val === BlockType.SPAWN) {
+            ctx.globalAlpha = 0.3;
+            ctx.drawImage(SPRITES.floor, c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
 
-      // Reset shadow
-      ctx.shadowBlur = 0;
+      // Ambient torch glow spots
+      const torchPositions = [
+        { x: 60, y: 60 }, { x: 740, y: 60 },
+        { x: 400, y: 40 }
+      ];
+      for (const torch of torchPositions) {
+        const flicker = 0.6 + Math.sin(frameCount * 0.05 + torch.x) * 0.15;
+        const gradient = ctx.createRadialGradient(torch.x, torch.y, 0, torch.x, torch.y, 120);
+        gradient.addColorStop(0, `rgba(194, 65, 12, ${0.08 * flicker})`);
+        gradient.addColorStop(0.5, `rgba(212, 160, 23, ${0.03 * flicker})`);
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(torch.x - 120, torch.y - 120, 240, 240);
 
-      // Walls
+        // Spawn embers from torches occasionally
+        if (frameCount % 15 === 0 && Math.random() > 0.5) {
+          spawnEmber(torch.x + (Math.random() - 0.5) * 20, torch.y);
+        }
+      }
+
+      // Walls - stone bricks
       for (let w of walls) {
         ctx.drawImage(SPRITES.wall, w.x, w.y, w.w, w.h);
       }
@@ -230,49 +319,83 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
 
       // Enemies
       for (let e of enemies) {
+        ctx.save();
+
+        if (e.hitFlash > 0) {
+          ctx.filter = 'brightness(3) saturate(0)';
+        }
+
         if (e.type === BlockType.MOB_PATROL) {
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = '#a855f7';
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = '#7c3aed';
           ctx.drawImage(SPRITES.patrol, e.x, e.y, e.w, e.h);
         }
         if (e.type === BlockType.MOB_STATIONARY) {
           ctx.shadowBlur = 15;
-          ctx.shadowColor = '#d946ef';
-          ctx.drawImage(SPRITES.stationary, e.x, e.y, e.w, e.h);
+          ctx.shadowColor = '#9333ea';
+          // Floating animation
+          const floatY = Math.sin(frameCount * 0.04) * 3;
+          ctx.drawImage(SPRITES.stationary, e.x, e.y + floatY, e.w, e.h);
         }
         if (e.type === BlockType.BOSS) {
-          ctx.shadowBlur = 20;
-          ctx.shadowColor = e.weak ? '#fca5a5' : '#be185d';
-          if (e.weak) ctx.filter = 'brightness(1.5) hue-rotate(90deg)';
+          ctx.shadowBlur = 25;
+          ctx.shadowColor = e.weak ? '#fca5a5' : '#8b0000';
+          if (e.weak) ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.3) hue-rotate(60deg)';
           ctx.drawImage(SPRITES.boss, e.x, e.y, e.w, e.h);
-          ctx.filter = 'none';
         }
-        
-        ctx.shadowBlur = 0; // reset
-        
-        if (e.type === BlockType.BOSS) {
-          if (e.weak) {
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 16px "Cinzel", serif';
-            ctx.fillText('WEAK!', e.x + 8, e.y - 10);
-          }
+
+        ctx.restore();
+
+        // HP bar for enemies
+        if (e.hp < e.maxHp) {
+          const barW = e.w;
+          const barH = 4;
+          const barX = e.x;
+          const barY = e.y - 8;
+          ctx.fillStyle = '#1a1510';
+          ctx.fillRect(barX, barY, barW, barH);
+          ctx.fillStyle = e.type === BlockType.BOSS ? '#8b0000' : '#7c3aed';
+          ctx.fillRect(barX, barY, barW * (e.hp / e.maxHp), barH);
+          ctx.strokeStyle = '#5a4d3e';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(barX, barY, barW, barH);
+        }
+
+        // Boss weak indicator
+        if (e.type === BlockType.BOSS && e.weak) {
+          ctx.fillStyle = '#d4a017';
+          ctx.font = 'bold 14px "Cinzel", serif';
+          ctx.textAlign = 'center';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#d4a017';
+          ctx.fillText('VULNERABLE', e.x + e.w / 2, e.y - 14);
+          ctx.shadowBlur = 0;
+          ctx.textAlign = 'start';
         }
       }
 
-      // Door
+      // Door with golden glow
       if (door) {
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#eab308';
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#d4a017';
         ctx.drawImage(SPRITES.door, door.x, door.y, door.w, door.h);
         ctx.shadowBlur = 0;
+
+        // Pulsing golden light from door
+        const doorPulse = 0.3 + Math.sin(frameCount * 0.03) * 0.15;
+        const doorGlow = ctx.createRadialGradient(door.x + 20, door.y + 20, 5, door.x + 20, door.y + 20, 50);
+        doorGlow.addColorStop(0, `rgba(212, 160, 23, ${doorPulse})`);
+        doorGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = doorGlow;
+        ctx.fillRect(door.x - 30, door.y - 30, 100, 100);
       }
 
       // Player
       if (player.invulnTimer % 10 < 5) {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#38bdf8';
-        
         ctx.save();
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#38bdf8';
+
         if (!player.facingRight) {
           ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
           ctx.scale(-1, 1);
@@ -280,47 +403,97 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         }
         ctx.drawImage(SPRITES.hero, player.x, player.y, player.w, player.h);
         ctx.restore();
-        
-        ctx.shadowBlur = 0;
-        
-        // Attack visual
-        if (player.attackTimer > 10) {
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = '#fff';
-          ctx.beginPath();
-          if (player.facingRight) {
-            ctx.arc(player.x + player.w, player.y + player.h/2, 24, -Math.PI/3, Math.PI/3);
-          } else {
-            ctx.arc(player.x, player.y + player.h/2, 24, Math.PI - Math.PI/3, Math.PI + Math.PI/3);
-          }
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = '#fff';
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-        }
       }
 
-      // Vignette Overlay
-      const gradient = ctx.createRadialGradient(400, 240, 100, 400, 240, 500);
+      // Slash trails (Dead Cells style)
+      for (let i = slashTrails.length - 1; i >= 0; i--) {
+        const s = slashTrails[i];
+        s.life--;
+        if (s.life <= 0) { slashTrails.splice(i, 1); continue; }
+
+        const alpha = s.life / 14;
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.angle);
+
+        // Slash arc
+        ctx.beginPath();
+        ctx.arc(0, 0, s.size, -0.6, 0.6);
+        ctx.lineWidth = 3 * alpha;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+        ctx.stroke();
+
+        // Inner glow
+        ctx.beginPath();
+        ctx.arc(0, 0, s.size * 0.8, -0.4, 0.4);
+        ctx.lineWidth = 2 * alpha;
+        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.5})`;
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      // Ember particles
+      for (let i = embers.length - 1; i >= 0; i--) {
+        const e = embers[i];
+        e.x += e.vx;
+        e.y += e.vy;
+        e.life--;
+        if (e.life <= 0) { embers.splice(i, 1); continue; }
+
+        const alpha = e.life / e.maxLife;
+        ctx.fillStyle = e.color;
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = e.color;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.size * alpha, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+      }
+
+      // Vignette - warm dungeon feel
+      const gradient = ctx.createRadialGradient(400, 240, 150, 400, 240, 500);
       gradient.addColorStop(0, 'rgba(0,0,0,0)');
-      gradient.addColorStop(1, 'rgba(0,0,0,0.8)');
+      gradient.addColorStop(0.7, 'rgba(13,10,7,0.4)');
+      gradient.addColorStop(1, 'rgba(13,10,7,0.85)');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 800, 480);
 
-      // HUD
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 24px "Inter", sans-serif';
-      ctx.fillText(`HP: ${'♥'.repeat(player.hp)}${'♡'.repeat(5 - player.hp)}`, 20, 40);
-      ctx.font = 'bold 18px "Cinzel", serif';
-      ctx.fillText(`Room: ${currentRoomIdx + 1} / ${level.rooms.length}`, 20, 75);
+      // HUD - Medieval style
+      ctx.shadowBlur = 0;
 
-      ctx.font = '14px "Inter", sans-serif';
-      ctx.fillStyle = '#a1a1aa';
-      ctx.fillText(`이동: 방향키 | 점프: ↑ | 공격: Space`, 20, 460);
+      // HP hearts with warm glow
+      const heartY = 30;
+      for (let i = 0; i < 5; i++) {
+        const hx = 24 + i * 28;
+        if (i < player.hp) {
+          ctx.fillStyle = '#cc2200';
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#cc2200';
+        } else {
+          ctx.fillStyle = '#3d3630';
+          ctx.shadowBlur = 0;
+        }
+        ctx.font = '20px serif';
+        ctx.fillText('♥', hx, heartY);
+      }
+      ctx.shadowBlur = 0;
+
+      // Room counter
+      ctx.fillStyle = '#d4a017';
+      ctx.font = 'bold 16px "Cinzel", serif';
+      ctx.fillText(`Room ${currentRoomIdx + 1} / ${level.rooms.length}`, 24, 58);
+
+      // Controls hint
+      ctx.font = '13px "Cinzel", serif';
+      ctx.fillStyle = '#5a4d3e';
+      ctx.fillText('이동: ← → | 점프: ↑ | 공격: Space', 24, 465);
 
       animationFrameId = requestAnimationFrame(update);
     };
-    
+
     update();
 
     return () => {
@@ -331,67 +504,58 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
   }, [level, onWin, onLose]);
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center min-h-screen bg-[#050505] bg-noise p-4 relative"
+      className="flex flex-col items-center justify-center min-h-screen bg-dungeon p-4 relative"
     >
-      <div className="absolute top-0 left-0 w-full h-full bg-yellow-900/5 pointer-events-none"></div>
-      
       <div className="mb-6 text-center relative z-10">
-        <h2 className="text-4xl font-display font-black text-yellow-500 tracking-widest drop-shadow-[0_0_10px_rgba(234,179,8,0.5)] mb-2">{level.name}</h2>
-        <p className="text-zinc-400 font-medium tracking-wide">제작자: <span className="text-zinc-200">{level.creator}</span> | 악명: <span className="text-purple-400">{level.infamy}</span></p>
+        <h2 className="text-3xl md:text-4xl font-display font-black text-[#d4a017] tracking-widest glow-gold mb-2">{level.name}</h2>
+        <p className="text-[#8b7355] font-medieval tracking-wide">
+          제작자: <span className="text-[#e8dcc8]">{level.creator}</span>
+          <span className="mx-3 text-[#3d3630]">|</span>
+          악명: <span className="text-[#7c3aed]">{level.infamy}</span>
+        </p>
       </div>
-      
-      <div className="relative z-10 p-2 rounded-2xl bg-zinc-900/50 backdrop-blur-md border border-zinc-800/50 shadow-[0_0_50px_rgba(234,179,8,0.1)]">
+
+      <div className="relative z-10 p-1 rounded-lg border-medieval">
         <canvas
           ref={canvasRef}
           width={800}
           height={480}
-          className="rounded-xl shadow-2xl bg-[#050505] max-w-full"
+          className="rounded bg-[#0d0a07] max-w-full"
           style={{ touchAction: 'none' }}
         />
       </div>
 
       {isMobile && (
         <div className="fixed bottom-0 left-0 right-0 flex justify-between items-end p-4 pb-6 z-50 pointer-events-none select-none">
-          {/* D-Pad (Left side) */}
           <div className="flex gap-2 items-end pointer-events-auto">
             <button
-              className="w-16 h-16 rounded-2xl bg-zinc-800/80 backdrop-blur border border-zinc-700/50 text-zinc-300 text-2xl font-bold active:bg-zinc-600 active:scale-95 transition-all flex items-center justify-center"
+              className="w-16 h-16 rounded-xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-95 transition-all flex items-center justify-center"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowLeft = false; }}
               onContextMenu={(e) => e.preventDefault()}
-            >
-              ←
-            </button>
+            >←</button>
             <button
-              className="w-16 h-16 rounded-2xl bg-zinc-800/80 backdrop-blur border border-zinc-700/50 text-zinc-300 text-2xl font-bold active:bg-zinc-600 active:scale-95 transition-all flex items-center justify-center"
+              className="w-16 h-16 rounded-xl btn-medieval text-[#d4a017] text-2xl font-bold active:scale-95 transition-all flex items-center justify-center"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowRight = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowRight = false; }}
               onContextMenu={(e) => e.preventDefault()}
-            >
-              →
-            </button>
+            >→</button>
           </div>
-
-          {/* Action buttons (Right side) */}
           <div className="flex gap-2 items-end pointer-events-auto">
             <button
-              className="w-16 h-16 rounded-2xl bg-yellow-600/60 backdrop-blur border border-yellow-500/50 text-yellow-200 text-sm font-bold active:bg-yellow-500/80 active:scale-95 transition-all flex items-center justify-center"
+              className="w-16 h-16 rounded-xl btn-medieval text-[#d4a017] text-sm font-bold active:scale-95 transition-all flex items-center justify-center font-medieval"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.ArrowUp = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.ArrowUp = false; }}
               onContextMenu={(e) => e.preventDefault()}
-            >
-              JUMP
-            </button>
+            >JUMP</button>
             <button
-              className="w-16 h-16 rounded-2xl bg-red-600/60 backdrop-blur border border-red-500/50 text-red-200 text-sm font-bold active:bg-red-500/80 active:scale-95 transition-all flex items-center justify-center"
+              className="w-16 h-16 rounded-xl btn-medieval text-[#cc2200] text-sm font-bold active:scale-95 transition-all flex items-center justify-center font-medieval"
               onTouchStart={(e) => { e.preventDefault(); keysRef.current.Space = true; }}
               onTouchEnd={(e) => { e.preventDefault(); keysRef.current.Space = false; }}
               onContextMenu={(e) => e.preventDefault()}
-            >
-              ATK
-            </button>
+            >ATK</button>
           </div>
         </div>
       )}

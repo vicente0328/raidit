@@ -16,7 +16,9 @@ const firestoreDatabaseId = import.meta.env.VITE_FIREBASE_FIRESTORE_DB_ID;
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firestoreDatabaseId);
+export const db = firestoreDatabaseId && firestoreDatabaseId !== '(default)'
+  ? getFirestore(app, firestoreDatabaseId)
+  : getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = async () => {

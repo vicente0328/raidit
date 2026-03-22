@@ -191,7 +191,7 @@ export default function App() {
   };
 
   if (!isAuthReady) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white">Loading...</div>;
+    return <div className="min-h-screen bg-[#0d0a07] flex items-center justify-center text-[#d4a017] font-display text-xl tracking-widest glow-gold">입장 중...</div>;
   }
 
   if (screen === 'home') {
@@ -216,19 +216,39 @@ export default function App() {
 
   if (screen === 'result' && gameResult) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-100 font-sans">
-        <h1 className={`text-6xl font-black mb-6 tracking-tight ${gameResult.win ? 'text-yellow-500' : 'text-red-500'}`}>
+      <div className="min-h-screen bg-dungeon flex flex-col items-center justify-center text-[#e8dcc8] font-sans relative overflow-hidden">
+        {/* Ambient glow based on result */}
+        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none ${gameResult.win ? 'bg-[#d4a017]/10' : 'bg-[#8b0000]/10'}`}></div>
+
+        {/* Ornamental line */}
+        <div className="flex items-center justify-center gap-4 mb-8 relative z-10">
+          <div className="w-16 h-px bg-gradient-to-r from-transparent to-[#5a4d3e]"></div>
+          <span className="text-[#5a4d3e] text-xs tracking-[0.3em] font-medieval uppercase">
+            {gameResult.win ? 'Victory' : 'Defeat'}
+          </span>
+          <div className="w-16 h-px bg-gradient-to-l from-transparent to-[#5a4d3e]"></div>
+        </div>
+
+        <h1 className={`text-5xl md:text-7xl font-display font-black mb-8 tracking-wider relative z-10 ${gameResult.win ? 'text-[#d4a017] glow-gold' : 'text-[#cc2200] glow-blood'}`}>
           {gameResult.win ? '공략 성공!' : '공략 실패...'}
         </h1>
-        <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl text-center mb-12">
-          <p className="text-zinc-400 text-xl font-medium mb-2">명성 변화</p>
-          <p className={`text-5xl font-black ${gameResult.fameChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
+
+        <div className="card-stone p-8 md:p-10 rounded-2xl text-center mb-10 relative z-10 min-w-[280px]">
+          {/* Corner ornaments */}
+          <div className="absolute top-2 left-2 w-4 h-4 border-t border-l border-[#5a4d3e]/50"></div>
+          <div className="absolute top-2 right-2 w-4 h-4 border-t border-r border-[#5a4d3e]/50"></div>
+          <div className="absolute bottom-2 left-2 w-4 h-4 border-b border-l border-[#5a4d3e]/50"></div>
+          <div className="absolute bottom-2 right-2 w-4 h-4 border-b border-r border-[#5a4d3e]/50"></div>
+
+          <p className="text-[#8b7355] text-lg font-medieval mb-3 tracking-wider">명성 변화</p>
+          <p className={`text-5xl md:text-6xl font-display font-black ${gameResult.fameChange > 0 ? 'text-[#d4a017] glow-gold' : 'text-[#cc2200] glow-blood'}`}>
             {gameResult.fameChange > 0 ? '+' : ''}{gameResult.fameChange}
           </p>
         </div>
-        <button 
+
+        <button
           onClick={() => { setGameResult(null); setScreen('hero_dash'); }}
-          className="bg-zinc-800 hover:bg-zinc-700 px-10 py-4 rounded-2xl font-bold text-lg transition-colors"
+          className="btn-medieval text-[#d4a017] hover:text-[#f0c85a] px-10 py-4 rounded-xl font-medieval font-bold text-lg transition-all relative z-10"
         >
           길드로 돌아가기
         </button>

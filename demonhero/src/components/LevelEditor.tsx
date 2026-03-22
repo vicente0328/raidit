@@ -3,40 +3,29 @@ import { BlockType, RoomData } from '../types';
 import { createFloorGrid } from '../utils';
 import { Save, X, Layers, Play } from 'lucide-react';
 import { motion } from 'motion/react';
-import { SPRITES, heroSvg, patrolSvg, stationarySvg, bossSvg, wallSvg, spikeSvg, doorSvg } from '../sprites';
+import { SPRITE_URLS } from '../sprites';
 import { GameCanvas } from './GameCanvas';
 
-const BLOCK_SPRITES = {
+const BLOCK_IMAGES: Record<number, string> = {
   [BlockType.EMPTY]: '',
-  [BlockType.WALL]: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(wallSvg)}')`,
-  [BlockType.SPIKE]: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(spikeSvg)}')`,
-  [BlockType.MOB_PATROL]: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(patrolSvg)}')`,
-  [BlockType.MOB_STATIONARY]: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(stationarySvg)}')`,
-  [BlockType.BOSS]: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(bossSvg)}')`,
-  [BlockType.DOOR]: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(doorSvg)}')`,
-  [BlockType.SPAWN]: `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(heroSvg)}')`,
+  [BlockType.WALL]: SPRITE_URLS.wall,
+  [BlockType.SPIKE]: SPRITE_URLS.spike,
+  [BlockType.MOB_PATROL]: SPRITE_URLS.patrol,
+  [BlockType.MOB_STATIONARY]: SPRITE_URLS.stationary,
+  [BlockType.BOSS]: SPRITE_URLS.boss,
+  [BlockType.DOOR]: SPRITE_URLS.door,
+  [BlockType.SPAWN]: SPRITE_URLS.spawn,
 };
 
-const BLOCK_COLORS = {
-  [BlockType.EMPTY]: 'bg-[#050505]',
-  [BlockType.WALL]: 'bg-zinc-600 border-t-zinc-500 border-l-zinc-500 border-b-zinc-800 border-r-zinc-800 border-2',
-  [BlockType.SPIKE]: 'bg-red-900 border-red-500 border',
-  [BlockType.MOB_PATROL]: 'bg-purple-900 border-purple-500 border shadow-[inset_0_0_10px_rgba(168,85,247,0.5)]',
-  [BlockType.MOB_STATIONARY]: 'bg-fuchsia-900 border-fuchsia-500 border shadow-[inset_0_0_10px_rgba(217,70,239,0.5)]',
-  [BlockType.BOSS]: 'bg-pink-950 border-pink-500 border-2 shadow-[inset_0_0_15px_rgba(236,72,153,0.8)]',
-  [BlockType.DOOR]: 'bg-yellow-900 border-yellow-500 border shadow-[inset_0_0_10px_rgba(234,179,8,0.5)]',
-  [BlockType.SPAWN]: 'bg-emerald-900 border-emerald-500 border shadow-[inset_0_0_10px_rgba(16,185,129,0.5)]',
-};
-
-const BLOCK_NAMES = {
+const BLOCK_NAMES: Record<number, string> = {
   [BlockType.EMPTY]: '지우개',
-  [BlockType.WALL]: '벽/바닥',
-  [BlockType.SPIKE]: '가시 함정',
-  [BlockType.MOB_PATROL]: '순찰 몹',
-  [BlockType.MOB_STATIONARY]: '고정 몹',
-  [BlockType.BOSS]: '보스 (약점형)',
-  [BlockType.DOOR]: '다음 방 문',
-  [BlockType.SPAWN]: '시작 지점',
+  [BlockType.WALL]: '석벽',
+  [BlockType.SPIKE]: '철가시 함정',
+  [BlockType.MOB_PATROL]: '해골 전사',
+  [BlockType.MOB_STATIONARY]: '어둠 마법사',
+  [BlockType.BOSS]: '마왕 (약점형)',
+  [BlockType.DOOR]: '고대의 문',
+  [BlockType.SPAWN]: '소환진',
 };
 
 interface Props {
@@ -80,7 +69,7 @@ export function LevelEditor({ onSave, onCancel }: Props) {
     });
 
     if (!hasSpawn) {
-      setMessage({ text: '용사 시작점(SPAWN)이 최소 1개 필요합니다!', type: 'error' });
+      setMessage({ text: '소환진(SPAWN)이 최소 1개 필요합니다!', type: 'error' });
       return false;
     }
     if (!hasBoss) {
@@ -109,22 +98,22 @@ export function LevelEditor({ onSave, onCancel }: Props) {
 
   if (isTesting) {
     return (
-      <div className="relative w-full h-screen bg-[#050505] overflow-hidden flex flex-col items-center justify-center">
-        <GameCanvas 
-          level={{ id: 'test', name: '테스트 플레이', creator: '마왕 (테스트)', infamy: 0, clears: 0, attempts: 0, rooms }}
-          onWin={() => { 
-            setHasClearedTest(true); 
-            setIsTesting(false); 
-            setMessage({ text: '테스트 클리어! 이제 저장할 수 있습니다.', type: 'success' }); 
+      <div className="relative w-full h-screen bg-[#0d0a07] overflow-hidden flex flex-col items-center justify-center">
+        <GameCanvas
+          level={{ id: 'test', name: '테스트 플레이', creator: '마왕 (테스트)', creatorId: 'test', infamy: 0, clears: 0, attempts: 0, rooms }}
+          onWin={() => {
+            setHasClearedTest(true);
+            setIsTesting(false);
+            setMessage({ text: '테스트 클리어! 이제 저장할 수 있습니다.', type: 'success' });
           }}
-          onLose={() => { 
-            setIsTesting(false); 
-            setMessage({ text: '테스트 실패... 난이도를 조절해보세요.', type: 'error' }); 
+          onLose={() => {
+            setIsTesting(false);
+            setMessage({ text: '테스트 실패... 난이도를 조절해보세요.', type: 'error' });
           }}
         />
-        <button 
+        <button
           onClick={() => setIsTesting(false)}
-          className="absolute top-6 right-6 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 z-50 backdrop-blur-md transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+          className="absolute top-6 right-6 btn-medieval text-[#e8dcc8] px-6 py-3 rounded-xl font-medieval font-bold flex items-center gap-2 z-50"
         >
           <X className="w-5 h-5" /> 테스트 종료
         </button>
@@ -133,116 +122,132 @@ export function LevelEditor({ onSave, onCancel }: Props) {
   }
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="flex h-screen bg-[#050505] bg-noise text-white font-sans overflow-hidden"
+      className="flex h-screen bg-[#0d0a07] text-[#e8dcc8] font-sans overflow-hidden"
     >
       {/* Sidebar */}
-      <div className="w-80 border-r border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl p-6 flex flex-col shadow-2xl z-10 relative">
-        <h2 className="text-2xl font-display font-black text-purple-500 mb-8 flex items-center gap-3 tracking-widest drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]">
-          <Layers className="w-6 h-6" /> 마왕성 설계
+      <div className="w-72 md:w-80 border-r border-[#3d3630]/50 bg-gradient-to-b from-[#1a1510] to-[#0d0a07] p-5 flex flex-col z-10 relative">
+        {/* Decorative top line */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#7c3aed]/30 to-transparent"></div>
+
+        <h2 className="text-xl font-display font-black text-[#7c3aed] mb-6 flex items-center gap-3 tracking-widest glow-royal">
+          <Layers className="w-5 h-5" /> 마왕성 설계
         </h2>
-        
-        <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">건축 자재</p>
-          {Object.entries(BLOCK_NAMES).map(([type, name]) => (
-            <button 
-              key={type}
-              onClick={() => setSelectedBlock(Number(type))}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all duration-200 ${
-                selectedBlock === Number(type) 
-                  ? 'bg-purple-900/20 border border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.2)]' 
-                  : 'bg-zinc-900/40 border border-transparent hover:border-zinc-700/50'
-              }`}
-            >
-              <div 
-                className={`w-8 h-8 rounded-md shadow-inner ${Number(type) === BlockType.EMPTY ? 'border border-dashed border-zinc-600' : 'bg-center bg-no-repeat bg-contain'}`}
-                style={{ backgroundImage: BLOCK_SPRITES[Number(type) as BlockType] }}
-              ></div>
-              <span className="font-bold text-zinc-300 tracking-wide">{name}</span>
-            </button>
-          ))}
+
+        <div className="space-y-2 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          <p className="text-[10px] font-bold text-[#5a4d3e] uppercase tracking-[0.2em] mb-3 font-medieval">건축 자재</p>
+          {Object.entries(BLOCK_NAMES).map(([type, name]) => {
+            const typeNum = Number(type);
+            const isSelected = selectedBlock === typeNum;
+            return (
+              <button
+                key={type}
+                onClick={() => setSelectedBlock(typeNum)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+                  isSelected
+                    ? 'bg-[#4c1d95]/20 border border-[#7c3aed]/50 shadow-[0_0_12px_rgba(124,58,237,0.15)]'
+                    : 'bg-transparent border border-transparent hover:border-[#3d3630]/50 hover:bg-[#1a1510]'
+                }`}
+              >
+                <div
+                  className={`w-8 h-8 rounded-md shadow-inner flex-shrink-0 ${typeNum === BlockType.EMPTY ? 'border border-dashed border-[#5a4d3e]' : 'bg-center bg-no-repeat bg-cover'}`}
+                  style={typeNum !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : undefined}
+                ></div>
+                <span className="font-medieval font-bold text-sm text-[#c4a882] tracking-wide">{name}</span>
+              </button>
+            );
+          })}
         </div>
-        
-        <div className="mt-8 space-y-3 pt-6 border-t border-zinc-800/50">
+
+        <div className="mt-6 space-y-2 pt-5 border-t border-[#3d3630]/50">
           {message && (
-            <div className={`p-3 rounded-xl text-sm font-bold text-center mb-4 ${message.type === 'error' ? 'bg-red-900/30 text-red-400 border border-red-500/30' : 'bg-green-900/30 text-green-400 border border-green-500/30'}`}>
+            <div className={`p-3 rounded-xl text-xs font-medieval font-bold text-center mb-3 ${
+              message.type === 'error'
+                ? 'bg-[#8b0000]/15 text-[#cc2200] border border-[#8b0000]/30'
+                : 'bg-[#166534]/15 text-[#4ade80] border border-[#166534]/30'
+            }`}>
               {message.text}
             </div>
           )}
-          <button 
-            onClick={handleTestPlay} 
-            className="w-full bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/50 text-blue-300 py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+          <button
+            onClick={handleTestPlay}
+            className="w-full btn-medieval text-[#38bdf8] py-3.5 rounded-xl font-medieval font-bold text-sm flex items-center justify-center gap-2 transition-all"
           >
-            <Play className="w-5 h-5" /> 테스트 플레이
+            <Play className="w-4 h-4" /> 테스트 플레이
           </button>
-          <button 
-            onClick={handleSave} 
+          <button
+            onClick={handleSave}
             disabled={!hasClearedTest}
-            className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all ${
-              hasClearedTest 
-                ? 'bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/50 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.2)]' 
-                : 'bg-zinc-900/50 border border-zinc-800 text-zinc-600 cursor-not-allowed'
+            className={`w-full py-3.5 rounded-xl font-medieval font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+              hasClearedTest
+                ? 'btn-medieval text-[#7c3aed]'
+                : 'bg-[#1a1510] border-2 border-[#2a2520] text-[#3d3630] cursor-not-allowed'
             }`}
           >
-            <Save className="w-5 h-5" /> 저장 및 오픈
+            <Save className="w-4 h-4" /> 저장 및 오픈
           </button>
-          <button 
-            onClick={onCancel} 
-            className="w-full bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
+          <button
+            onClick={onCancel}
+            className="w-full btn-medieval text-[#8b7355] py-3.5 rounded-xl font-medieval font-bold text-sm flex items-center justify-center gap-2"
           >
-            <X className="w-5 h-5" /> 취소
+            <X className="w-4 h-4" /> 취소
           </button>
         </div>
       </div>
-      
+
       {/* Main Editor Area */}
-      <div className="flex-1 flex flex-col items-center justify-center p-8 relative">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
-        
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 flex gap-2 bg-zinc-950/80 backdrop-blur-md p-2 rounded-2xl border border-zinc-800/50 shadow-2xl z-10">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 relative bg-dungeon">
+        {/* Subtle grid bg */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(90,77,62,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(90,77,62,0.05)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
+
+        {/* Room tabs */}
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-1 card-stone p-1.5 rounded-xl z-10">
           {[0, 1, 2].map(i => (
-            <button 
+            <button
               key={i}
               onClick={() => setCurrentRoom(i)}
-              className={`px-8 py-3 rounded-xl font-bold tracking-widest transition-all duration-200 ${
-                currentRoom === i 
-                  ? 'bg-purple-600/20 border border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.3)]' 
-                  : 'bg-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
+              className={`px-6 py-2.5 rounded-lg font-medieval font-bold text-sm tracking-widest transition-all duration-200 ${
+                currentRoom === i
+                  ? 'bg-[#4c1d95]/20 border border-[#7c3aed]/40 text-[#a78bfa] shadow-[0_0_8px_rgba(124,58,237,0.2)]'
+                  : 'bg-transparent text-[#5a4d3e] hover:text-[#8b7355] hover:bg-[#1a1510]'
               }`}
             >
               방 {i + 1}
             </button>
           ))}
         </div>
-        
-        <motion.div 
+
+        {/* Grid */}
+        <motion.div
           initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2 }}
-          className="border border-purple-500/30 bg-[#050505]/80 backdrop-blur-sm rounded-lg overflow-hidden shadow-[0_0_50px_rgba(168,85,247,0.1)] mt-16 relative z-10" 
-          style={{ display: 'grid', gridTemplateColumns: `repeat(20, 40px)` }}
+          className="border border-[#3d3630]/50 bg-[#0d0a07]/80 rounded-lg overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)] mt-14 relative z-10"
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(20, 40px)' }}
           onMouseLeave={() => setIsDragging(false)}
           onMouseUp={() => setIsDragging(false)}
         >
-          {rooms[currentRoom].grid.map((row, r) => 
+          {rooms[currentRoom].grid.map((row, r) =>
             row.map((cell, c) => (
-              <div 
+              <div
                 key={`${r}-${c}`}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setIsDragging(true);
                   handleCellAction(r, c);
                 }}
-                onMouseEnter={(e) => {
+                onMouseEnter={() => {
                   if (isDragging) handleCellAction(r, c);
                 }}
                 onDragStart={(e) => e.preventDefault()}
-                className={`w-[40px] h-[40px] border-r border-b border-zinc-800/30 cursor-crosshair transition-colors duration-75 ${cell === BlockType.EMPTY ? 'bg-transparent hover:bg-zinc-800/50' : 'bg-center bg-no-repeat bg-contain'}`}
-                style={{ backgroundImage: BLOCK_SPRITES[cell as BlockType] }}
+                className={`w-[40px] h-[40px] border-r border-b border-[#2a2520]/40 cursor-crosshair transition-colors duration-75 ${
+                  cell === BlockType.EMPTY ? 'bg-transparent hover:bg-[#2a2520]/40' : 'bg-center bg-no-repeat bg-cover'
+                }`}
+                style={cell !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[cell as BlockType]})` } : undefined}
               />
             ))
           )}
         </motion.div>
-        <p className="mt-8 text-zinc-600 font-medium tracking-wide z-10">드래그하여 여러 블록을 연속으로 배치할 수 있습니다.</p>
+        <p className="mt-6 text-[#5a4d3e] font-medieval text-sm tracking-wide z-10">드래그하여 여러 블록을 연속으로 배치할 수 있습니다.</p>
       </div>
     </motion.div>
   );
