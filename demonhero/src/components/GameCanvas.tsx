@@ -71,10 +71,12 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
     let embers: Ember[] = [];
     let slashTrails: { x: number; y: number; angle: number; life: number; size: number }[] = [];
 
-    // BIG player sprite
+    // Player — collision box fits in 1 tile, sprite renders bigger
+    const PLAYER_DRAW_W = 56;
+    const PLAYER_DRAW_H = 68;
     let player = {
       x: 2 * T, y: (TOWER_ROWS - 3) * T - 68,
-      w: 56, h: 68,
+      w: T - 4, h: 68, // collision width fits in 1 tile gap (44px < 48px)
       vx: 0, vy: 0,
       hp: 5,
       isGrounded: false,
@@ -498,10 +500,16 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         ctx.shadowBlur = 14;
         ctx.shadowColor = '#38bdf8';
 
+        // Draw sprite centered on collision box, but bigger
+        const drawX = player.x + player.w / 2 - PLAYER_DRAW_W / 2;
+        const drawY = player.y + player.h - PLAYER_DRAW_H;
+
         if (!player.facingRight) {
-          ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+          const cx = drawX + PLAYER_DRAW_W / 2;
+          const cy = drawY + PLAYER_DRAW_H / 2;
+          ctx.translate(cx, cy);
           ctx.scale(-1, 1);
-          ctx.translate(-(player.x + player.w / 2), -(player.y + player.h / 2));
+          ctx.translate(-cx, -cy);
         }
 
         let heroSprite: HTMLImageElement;
@@ -512,7 +520,7 @@ export function GameCanvas({ level, onWin, onLose }: Props) {
         } else {
           heroSprite = ANIM.hero.idle[0];
         }
-        ctx.drawImage(heroSprite, player.x, player.y, player.w, player.h);
+        ctx.drawImage(heroSprite, drawX, drawY, PLAYER_DRAW_W, PLAYER_DRAW_H);
         ctx.restore();
       }
 
