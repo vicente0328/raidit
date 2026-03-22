@@ -3,397 +3,524 @@ import { TOWER_COLS, TOWER_ROWS, HORIZ_COLS, HORIZ_ROWS } from './utils';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
-/**
- * Procedurally generates a playable vertical tower room.
- * Guarantees: SPAWN at bottom, DOOR at top, reachable path between platforms.
- */
+// === PHYSICS CONSTRAINTS (from GameCanvas) ===
+// gravity=1.0, jumpVy=-15, moveSpeed=5
+// Max jump height: ~120px = 2.5 tiles
+// Max jump horizontal: ~150px = 3.1 tiles (during full arc)
+// Conservative limits for guaranteed reachability:
+const MAX_JUMP_UP = 2;       // max rows upward the player can jump
+const MAX_JUMP_HORIZ = 3;    // max horizontal tiles during jump
+
+// === HELPERS ===
+const rand = (min: number, max: number) =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
+const chance = (pct: number) => Math.random() < pct;
+const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+// === DIFFICULTY CONFIG ===
+interface DiffConfig {
+  minPlatLen: number;
+  maxPlatLen: number;
+  stepUpRows: number;       // rows to climb per step (≤ MAX_JUMP_UP)
+  spikeChance: number;
+  patrolChance: number;
+  mageChance: number;
+  potionEvery: number;
+  useOneWay: number;
+  extraBranches: number;
+  wallObstacles: number;
+}
+
+function getConfig(d: Difficulty): DiffConfig {
+  switch (d) {
+    case 'easy': return {
+      minPlatLen: 5, maxPlatLen: 10, stepUpRows: 2,
+      spikeChance: 0.04, patrolChance: 0.15, mageChance: 0.03,
+      potionEvery: 3, useOneWay: 0.2, extraBranches: 4, wallObstacles: 1,
+    };
+    case 'normal': return {
+      minPlatLen: 4, maxPlatLen: 8, stepUpRows: 2,
+      spikeChance: 0.1, patrolChance: 0.3, mageChance: 0.1,
+      potionEvery: 5, useOneWay: 0.35, extraBranches: 3, wallObstacles: 2,
+    };
+    case 'hard': return {
+      minPlatLen: 3, maxPlatLen: 6, stepUpRows: 2,
+      spikeChance: 0.18, patrolChance: 0.4, mageChance: 0.2,
+      potionEvery: 7, useOneWay: 0.5, extraBranches: 2, wallObstacles: 3,
+    };
+  }
+}
+
+// === WAYPOINT ===
+interface Waypoint {
+  row: number;
+  colStart: number;
+  colEnd: number;
+}
+
+// ============================================================
+// VERTICAL MAP GENERATOR
+// ============================================================
+
+function buildVerticalSpine(cfg: DiffConfig): Waypoint[] {
+  const COLS = TOWER_COLS;
+  const ROWS = TOWER_ROWS;
+  const floorRow = ROWS - 3;
+  const waypoints: Waypoint[] = [];
+
+  // Floor: full width walkable
+  waypoints.push({ row: floorRow, colStart: 1, colEnd: COLS - 2 });
+
+  let curRow = floorRow;
+  let curCol = rand(3, COLS - 4); // approx player position
+  let goRight = chance(0.5);
+
+  // Climb upward, one safe step at a time
+  while (curRow > 4) {
+    const step = cfg.stepUpRows; // always ≤ MAX_JUMP_UP
+    const nextRow = Math.max(2, curRow - step);
+
+    // Pick platform length
+    const platLen = rand(cfg.minPlatLen, cfg.maxPlatLen);
+
+    // Determine horizontal position — must overlap with player's jump reach
+    let colStart: number, colEnd: number;
+    if (goRight) {
+      // Shift rightward but stay within jump range
+      const target = clamp(curCol + rand(0, MAX_JUMP_HORIZ - 1), 1, COLS - 2 - platLen);
+      colStart = target;
+      colEnd = Math.min(target + platLen - 1, COLS - 2);
+    } else {
+      // Shift leftward
+      const target = clamp(curCol - rand(0, MAX_JUMP_HORIZ - 1) - platLen + 1, 1, COLS - 2);
+      colStart = Math.max(target, 1);
+      colEnd = Math.min(colStart + platLen - 1, COLS - 2);
+    }
+
+    // Ensure reachability: player at curCol ± reach must overlap with [colStart, colEnd]
+    const reachLeft = curCol - MAX_JUMP_HORIZ;
+    const reachRight = curCol + MAX_JUMP_HORIZ;
+    if (colStart > reachRight || colEnd < reachLeft) {
+      // Force overlap
+      colStart = clamp(curCol - Math.floor(platLen / 2), 1, COLS - 2 - platLen);
+      colEnd = Math.min(colStart + platLen - 1, COLS - 2);
+    }
+
+    waypoints.push({ row: nextRow, colStart, colEnd });
+    curRow = nextRow;
+    curCol = Math.floor((colStart + colEnd) / 2);
+    goRight = !goRight; // zigzag
+  }
+
+  return waypoints;
+}
+
 export function generateRoom(difficulty: Difficulty): number[][] {
-  const grid: number[][] = Array.from({ length: TOWER_ROWS }, () =>
-    Array(TOWER_COLS).fill(BlockType.EMPTY)
+  const cfg = getConfig(difficulty);
+  const COLS = TOWER_COLS;
+  const ROWS = TOWER_ROWS;
+
+  const grid: number[][] = Array.from({ length: ROWS }, () =>
+    Array(COLS).fill(BlockType.EMPTY)
   );
 
-  const rand = (min: number, max: number) =>
-    Math.floor(Math.random() * (max - min + 1)) + min;
-  const chance = (pct: number) => Math.random() < pct;
-
   // === BORDERS ===
-  for (let r = 0; r < TOWER_ROWS; r++) {
+  for (let r = 0; r < ROWS; r++) {
     grid[r][0] = BlockType.WALL;
-    grid[r][TOWER_COLS - 1] = BlockType.WALL;
+    grid[r][COLS - 1] = BlockType.WALL;
   }
-  for (let c = 0; c < TOWER_COLS; c++) {
-    grid[0][c] = BlockType.WALL; // ceiling
-    grid[TOWER_ROWS - 1][c] = BlockType.WALL; // floor
-    grid[TOWER_ROWS - 2][c] = BlockType.WALL; // floor (2 thick)
+  for (let c = 0; c < COLS; c++) {
+    grid[0][c] = BlockType.WALL;
+    grid[ROWS - 1][c] = BlockType.WALL;
+    grid[ROWS - 2][c] = BlockType.WALL;
   }
 
-  // === CONFIG by difficulty ===
-  const config = {
-    easy: {
-      platformGap: 5,
-      minPlatLen: 6,
-      maxPlatLen: 10,
-      spikeChance: 0.08,
-      patrolChance: 0.2,
-      mageChance: 0.05,
-      potionChance: 0.35,
-      useOneWay: 0.3,
-    },
-    normal: {
-      platformGap: 6,
-      minPlatLen: 4,
-      maxPlatLen: 8,
-      spikeChance: 0.15,
-      patrolChance: 0.35,
-      mageChance: 0.15,
-      potionChance: 0.2,
-      useOneWay: 0.4,
-    },
-    hard: {
-      platformGap: 6,
-      minPlatLen: 3,
-      maxPlatLen: 6,
-      spikeChance: 0.25,
-      patrolChance: 0.45,
-      mageChance: 0.25,
-      potionChance: 0.1,
-      useOneWay: 0.5,
-    },
-  }[difficulty];
+  // === SPINE ===
+  const spine = buildVerticalSpine(cfg);
 
-  // === GENERATE PLATFORMS ===
-  const platformRows: { row: number; startCol: number; endCol: number; isOneWay: boolean }[] = [];
-  let side: 'left' | 'right' | 'center' = 'left';
-
-  const startRow = TOWER_ROWS - 3 - config.platformGap;
-  const endRow = 3;
-
-  for (let row = startRow; row > endRow; row -= config.platformGap) {
-    const platLen = rand(config.minPlatLen, config.maxPlatLen);
-    const isOneWay = chance(config.useOneWay);
-    let startCol: number;
-    let endCol: number;
-
-    if (side === 'left') {
-      startCol = rand(1, 3);
-      endCol = Math.min(startCol + platLen, TOWER_COLS - 2);
-      side = 'right';
-    } else if (side === 'right') {
-      endCol = rand(TOWER_COLS - 4, TOWER_COLS - 2);
-      startCol = Math.max(endCol - platLen, 1);
-      side = chance(0.3) ? 'center' : 'left';
-    } else {
-      const mid = Math.floor(TOWER_COLS / 2);
-      startCol = Math.max(mid - Math.floor(platLen / 2), 1);
-      endCol = Math.min(startCol + platLen, TOWER_COLS - 2);
-      side = chance(0.5) ? 'left' : 'right';
-    }
-
-    platformRows.push({ row, startCol, endCol, isOneWay });
-
-    for (let c = startCol; c <= endCol; c++) {
-      grid[row][c] = isOneWay ? BlockType.PLATFORM : BlockType.WALL;
+  // Place spine platforms (skip first = floor)
+  for (let i = 1; i < spine.length; i++) {
+    const wp = spine[i];
+    const oneWay = chance(cfg.useOneWay);
+    for (let c = wp.colStart; c <= wp.colEnd; c++) {
+      grid[wp.row][c] = oneWay ? BlockType.PLATFORM : BlockType.WALL;
     }
   }
 
-  // Stepping stones between main platforms
-  for (let i = 0; i < platformRows.length - 1; i++) {
-    const upper = platformRows[i];
-    const lower = platformRows[i + 1] || { row: TOWER_ROWS - 3 };
-    const midRow = Math.floor((upper.row + lower.row) / 2);
+  // === SPAWN (bottom) ===
+  const spawnCol = rand(2, 5);
+  grid[ROWS - 3][spawnCol] = BlockType.SPAWN;
 
-    if (chance(0.4) && midRow > upper.row + 2) {
-      const len = rand(2, 3);
-      const sc = rand(2, TOWER_COLS - 3 - len);
-      for (let c = sc; c < sc + len; c++) {
+  // === DOOR (top of highest platform) ===
+  const topWp = spine[spine.length - 1];
+  const doorCol = clamp(rand(topWp.colStart, topWp.colEnd), topWp.colStart, topWp.colEnd);
+  grid[topWp.row - 1][doorCol] = BlockType.DOOR;
+
+  // === BRANCH PLATFORMS (extra variety) ===
+  for (let b = 0; b < cfg.extraBranches; b++) {
+    const idx = rand(1, Math.max(1, spine.length - 2));
+    const lower = spine[idx];
+    const upper = spine[Math.min(idx + 1, spine.length - 1)];
+    const midRow = Math.floor((lower.row + upper.row) / 2);
+    if (midRow <= 1 || midRow >= ROWS - 2) continue;
+
+    const len = rand(2, 4);
+    const sc = rand(1, COLS - 2 - len);
+    for (let c = sc; c < sc + len && c <= COLS - 2; c++) {
+      if (grid[midRow][c] === BlockType.EMPTY) {
         grid[midRow][c] = BlockType.PLATFORM;
       }
     }
   }
 
-  // SPAWN
-  const spawnCol = rand(2, 5);
-  grid[TOWER_ROWS - 3][spawnCol] = BlockType.SPAWN;
-
-  // DOOR
-  if (platformRows.length > 0) {
-    const topPlat = platformRows[0];
-    const doorCol = rand(topPlat.startCol, topPlat.endCol);
-    grid[topPlat.row - 1][doorCol] = BlockType.DOOR;
-  } else {
-    grid[2][Math.floor(TOWER_COLS / 2)] = BlockType.DOOR;
-  }
-
-  // ENEMIES
-  for (const plat of platformRows) {
-    const platWidth = plat.endCol - plat.startCol + 1;
-    if (platWidth >= 4 && chance(config.patrolChance)) {
-      const ec = rand(plat.startCol + 1, plat.endCol - 1);
-      if (grid[plat.row - 1][ec] === BlockType.EMPTY) {
-        grid[plat.row - 1][ec] = BlockType.MOB_PATROL;
-      }
-    }
-    if (platWidth >= 3 && chance(config.mageChance)) {
-      const ec = rand(plat.startCol, plat.endCol);
-      if (grid[plat.row - 1][ec] === BlockType.EMPTY) {
-        grid[plat.row - 1][ec] = BlockType.MOB_STATIONARY;
-      }
-    }
-  }
-  if (chance(config.patrolChance)) {
-    const ec = rand(6, TOWER_COLS - 4);
-    if (grid[TOWER_ROWS - 3][ec] === BlockType.EMPTY) {
-      grid[TOWER_ROWS - 3][ec] = BlockType.MOB_PATROL;
+  // === WALL OBSTACLES ===
+  for (let w = 0; w < cfg.wallObstacles; w++) {
+    const obsRow = rand(4, ROWS - 6);
+    if (spine.some(wp => Math.abs(wp.row - obsRow) <= 1)) continue;
+    const fromLeft = chance(0.5);
+    const obsLen = rand(1, 3);
+    for (let j = 0; j < obsLen; j++) {
+      const c = fromLeft ? 1 + j : COLS - 2 - j;
+      if (grid[obsRow][c] === BlockType.EMPTY) grid[obsRow][c] = BlockType.WALL;
     }
   }
 
-  // SPIKES
-  for (const plat of platformRows) {
-    for (let c = plat.startCol; c <= plat.endCol; c++) {
-      if (chance(config.spikeChance) && grid[plat.row - 1][c] === BlockType.EMPTY) {
-        grid[plat.row - 1][c] = BlockType.SPIKE;
+  // === ENEMIES ===
+  for (let i = 1; i < spine.length; i++) {
+    const wp = spine[i];
+    const pw = wp.colEnd - wp.colStart + 1;
+    const above = wp.row - 1;
+
+    if (pw >= 4 && chance(cfg.patrolChance)) {
+      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
+      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_PATROL;
+    }
+    if (chance(cfg.mageChance)) {
+      const ec = rand(wp.colStart, wp.colEnd);
+      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_STATIONARY;
+    }
+  }
+  // Ground patrol
+  if (chance(cfg.patrolChance * 1.5)) {
+    const ec = rand(6, COLS - 4);
+    if (grid[ROWS - 3][ec] === BlockType.EMPTY) grid[ROWS - 3][ec] = BlockType.MOB_PATROL;
+  }
+
+  // === SPIKES (never block only landing path) ===
+  for (let i = 1; i < spine.length; i++) {
+    const wp = spine[i];
+    for (let c = wp.colStart; c <= wp.colEnd; c++) {
+      if (chance(cfg.spikeChance) && grid[wp.row - 1][c] === BlockType.EMPTY) {
+        const hasAlt = (c > wp.colStart && grid[wp.row - 1][c - 1] === BlockType.EMPTY) ||
+                       (c < wp.colEnd && grid[wp.row - 1][c + 1] === BlockType.EMPTY);
+        if (hasAlt) grid[wp.row - 1][c] = BlockType.SPIKE;
       }
     }
   }
-  for (let c = 2; c < TOWER_COLS - 2; c++) {
-    if (chance(config.spikeChance * 0.5) && grid[TOWER_ROWS - 3][c] === BlockType.EMPTY) {
-      grid[TOWER_ROWS - 3][c] = BlockType.SPIKE;
+  for (let c = 3; c < COLS - 3; c++) {
+    if (chance(cfg.spikeChance * 0.3) && grid[ROWS - 3][c] === BlockType.EMPTY) {
+      grid[ROWS - 3][c] = BlockType.SPIKE;
     }
   }
 
-  // POTIONS
-  for (const plat of platformRows) {
-    if (chance(config.potionChance)) {
-      const pc = rand(plat.startCol, plat.endCol);
-      if (grid[plat.row - 1][pc] === BlockType.EMPTY) {
-        grid[plat.row - 1][pc] = BlockType.POTION;
-      }
-    }
-  }
-
-  // WALL OBSTACLES
-  if (difficulty !== 'easy') {
-    const numObstacles = rand(1, 3);
-    for (let i = 0; i < numObstacles; i++) {
-      const obsRow = rand(5, TOWER_ROWS - 6);
-      const fromLeft = chance(0.5);
-      const obsLen = rand(1, 3);
-      const isOnPlatform = platformRows.some(p => Math.abs(p.row - obsRow) <= 1);
-      if (!isOnPlatform) {
-        for (let j = 0; j < obsLen; j++) {
-          const c = fromLeft ? 1 + j : TOWER_COLS - 2 - j;
-          if (grid[obsRow][c] === BlockType.EMPTY) {
-            grid[obsRow][c] = BlockType.WALL;
-          }
-        }
-      }
+  // === POTIONS ===
+  for (let i = 1; i < spine.length; i++) {
+    if (i % cfg.potionEvery === 0) {
+      const wp = spine[i];
+      const pc = rand(wp.colStart, wp.colEnd);
+      if (grid[wp.row - 1][pc] === BlockType.EMPTY) grid[wp.row - 1][pc] = BlockType.POTION;
     }
   }
 
   return grid;
 }
 
-/**
- * Procedurally generates a playable horizontal dungeon room.
- * Guarantees: SPAWN on left, DOOR on right, traversable path.
- */
-export function generateHorizontalRoom(difficulty: Difficulty): number[][] {
+// ============================================================
+// HORIZONTAL MAP GENERATOR
+// ============================================================
+
+function buildHorizontalSpine(cfg: DiffConfig): Waypoint[] {
   const COLS = HORIZ_COLS;
   const ROWS = HORIZ_ROWS;
+  const floorRow = ROWS - 3;
+  const waypoints: Waypoint[] = [];
+
+  // Start: spawn area
+  waypoints.push({ row: floorRow, colStart: 1, colEnd: 4 });
+
+  let curCol = 4;
+
+  while (curCol < COLS - 6) {
+    const sectionType = pick(['flat', 'pit', 'raised', 'elevated'] as const);
+    const sectionW = rand(3, 6);
+
+    switch (sectionType) {
+      case 'flat': {
+        const start = curCol + 1;
+        const end = Math.min(start + sectionW - 1, COLS - 4);
+        waypoints.push({ row: floorRow, colStart: start, colEnd: end });
+        curCol = end;
+        break;
+      }
+      case 'pit': {
+        // Gap width ≤ MAX_JUMP_HORIZ to ensure jumpability
+        const pitW = rand(1, Math.min(sectionW, MAX_JUMP_HORIZ));
+        // Optional bridge
+        if (pitW >= 2 && chance(0.5)) {
+          const bRow = floorRow - rand(1, MAX_JUMP_UP);
+          const bStart = curCol + Math.floor(pitW / 2);
+          waypoints.push({ row: bRow, colStart: bStart, colEnd: Math.min(bStart + 1, COLS - 2) });
+        }
+        // Landing on far side
+        const landStart = curCol + pitW + 1;
+        const landEnd = Math.min(landStart + 2, COLS - 4);
+        if (landStart < COLS - 4) {
+          waypoints.push({ row: floorRow, colStart: landStart, colEnd: landEnd });
+          curCol = landEnd;
+        } else {
+          curCol = landStart;
+        }
+        break;
+      }
+      case 'raised': {
+        const h = rand(1, MAX_JUMP_UP);
+        const start = curCol + 1;
+        const end = Math.min(start + sectionW - 1, COLS - 4);
+        waypoints.push({ row: floorRow - h, colStart: start, colEnd: end });
+        curCol = end;
+        break;
+      }
+      case 'elevated': {
+        const h = rand(1, MAX_JUMP_UP);
+        const start = curCol + 1;
+        const end = Math.min(start + sectionW - 1, COLS - 4);
+        waypoints.push({ row: floorRow - h, colStart: start, colEnd: end });
+        curCol = end;
+        break;
+      }
+    }
+  }
+
+  // Final: door area
+  waypoints.push({ row: floorRow, colStart: COLS - 5, colEnd: COLS - 2 });
+  return waypoints;
+}
+
+export function generateHorizontalRoom(difficulty: Difficulty): number[][] {
+  const cfg = getConfig(difficulty);
+  const COLS = HORIZ_COLS;
+  const ROWS = HORIZ_ROWS;
+  const floorRow = ROWS - 3;
+
   const grid: number[][] = Array.from({ length: ROWS }, () =>
     Array(COLS).fill(BlockType.EMPTY)
   );
 
-  const rand = (min: number, max: number) =>
-    Math.floor(Math.random() * (max - min + 1)) + min;
-  const chance = (pct: number) => Math.random() < pct;
-
-  const config = {
-    easy: {
-      pitChance: 0.15,
-      wallHeight: 3,
-      spikeChance: 0.06,
-      patrolChance: 0.15,
-      mageChance: 0.05,
-      potionChance: 0.25,
-      platformChance: 0.35,
-    },
-    normal: {
-      pitChance: 0.25,
-      wallHeight: 4,
-      spikeChance: 0.12,
-      patrolChance: 0.3,
-      mageChance: 0.12,
-      potionChance: 0.15,
-      platformChance: 0.3,
-    },
-    hard: {
-      pitChance: 0.35,
-      wallHeight: 5,
-      spikeChance: 0.2,
-      patrolChance: 0.4,
-      mageChance: 0.2,
-      potionChance: 0.08,
-      platformChance: 0.25,
-    },
-  }[difficulty];
-
   // === BORDERS ===
   for (let c = 0; c < COLS; c++) {
-    grid[0][c] = BlockType.WALL; // ceiling
-    grid[ROWS - 1][c] = BlockType.WALL; // floor
-    grid[ROWS - 2][c] = BlockType.WALL; // floor (2 thick)
+    grid[0][c] = BlockType.WALL;
+    grid[ROWS - 1][c] = BlockType.WALL;
+    grid[ROWS - 2][c] = BlockType.WALL;
   }
   for (let r = 0; r < ROWS; r++) {
-    grid[r][0] = BlockType.WALL; // left wall
-    grid[r][COLS - 1] = BlockType.WALL; // right wall
+    grid[r][0] = BlockType.WALL;
+    grid[r][COLS - 1] = BlockType.WALL;
   }
 
-  const floorRow = ROWS - 3; // row above 2-thick floor
+  // === SPINE ===
+  const spine = buildHorizontalSpine(cfg);
 
-  // === TERRAIN GENERATION ===
-  // Generate sections left to right
-  const sectionWidth = rand(4, 6);
-  type Section = { startCol: number; endCol: number; type: 'flat' | 'pit' | 'raised' | 'wall' };
-  const sections: Section[] = [];
+  // Track which cols have floor (to create pits)
+  const floorCols = new Set<number>();
 
-  let col = 2; // start after left wall + 1 buffer for spawn
-  // First section is always flat (spawn area)
-  sections.push({ startCol: col, endCol: col + 3, type: 'flat' });
-  col += 4;
-
-  while (col < COLS - 5) {
-    const w = rand(3, sectionWidth);
-    const endCol = Math.min(col + w, COLS - 5);
-
-    let type: Section['type'];
-    const r = Math.random();
-    if (r < config.pitChance) {
-      type = 'pit';
-    } else if (r < config.pitChance + 0.15) {
-      type = 'raised';
-    } else if (r < config.pitChance + 0.25) {
-      type = 'wall';
+  for (const wp of spine) {
+    if (wp.row === floorRow) {
+      for (let c = wp.colStart; c <= wp.colEnd; c++) floorCols.add(c);
     } else {
-      type = 'flat';
-    }
-
-    sections.push({ startCol: col, endCol, type });
-    col = endCol + 1;
-  }
-
-  // Last section is always flat (door area)
-  sections.push({ startCol: Math.max(col, COLS - 5), endCol: COLS - 2, type: 'flat' });
-
-  // === BUILD TERRAIN ===
-  for (const sec of sections) {
-    for (let c = sec.startCol; c <= sec.endCol; c++) {
-      if (c <= 0 || c >= COLS - 1) continue;
-
-      if (sec.type === 'flat') {
-        // Nothing extra — floor already exists
-      } else if (sec.type === 'pit') {
-        // Remove floor to create pit (deadly fall)
-        grid[ROWS - 2][c] = BlockType.EMPTY;
-        grid[ROWS - 1][c] = BlockType.EMPTY;
-        // Add spikes at bottom or leave as death pit
-        if (chance(0.5)) {
-          grid[ROWS - 1][c] = BlockType.WALL;
-          grid[ROWS - 2][c] = BlockType.SPIKE;
-        }
-      } else if (sec.type === 'raised') {
-        // Raise floor by 2-3 blocks
-        const height = rand(2, 3);
-        for (let h = 0; h < height; h++) {
-          const r = ROWS - 3 - h;
-          if (r > 1) grid[r][c] = BlockType.WALL;
-        }
-      } else if (sec.type === 'wall') {
-        // Vertical wall obstacle (ceiling to partway down)
-        const wallH = rand(2, config.wallHeight);
-        for (let h = 0; h < wallH; h++) {
-          const r = 1 + h;
-          if (r < ROWS - 3) grid[r][c] = BlockType.WALL;
+      const oneWay = chance(cfg.useOneWay);
+      for (let c = wp.colStart; c <= wp.colEnd; c++) {
+        if (grid[wp.row][c] === BlockType.EMPTY) {
+          grid[wp.row][c] = oneWay ? BlockType.PLATFORM : BlockType.WALL;
         }
       }
     }
   }
 
-  // === PLATFORMS (floating, one-way) ===
-  for (const sec of sections) {
-    if (sec.type === 'pit' && chance(0.7)) {
-      // Bridge over pit
-      const bridgeRow = ROWS - 4;
-      for (let c = sec.startCol; c <= sec.endCol; c++) {
-        grid[bridgeRow][c] = BlockType.PLATFORM;
-      }
-    }
-    if ((sec.type === 'flat' || sec.type === 'raised') && chance(config.platformChance)) {
-      // Floating platform above ground
-      const platRow = rand(ROWS - 7, ROWS - 5);
-      const platStart = rand(sec.startCol, Math.max(sec.startCol, sec.endCol - 2));
-      const platEnd = Math.min(platStart + rand(2, 4), sec.endCol);
-      for (let c = platStart; c <= platEnd; c++) {
-        if (grid[platRow][c] === BlockType.EMPTY) {
-          grid[platRow][c] = BlockType.PLATFORM;
-        }
+  // Remove floor at pit locations
+  for (let c = 1; c < COLS - 1; c++) {
+    if (!floorCols.has(c)) {
+      grid[ROWS - 2][c] = BlockType.EMPTY;
+      grid[ROWS - 1][c] = BlockType.EMPTY;
+      if (chance(0.4)) {
+        grid[ROWS - 1][c] = BlockType.WALL;
+        grid[ROWS - 2][c] = BlockType.SPIKE;
       }
     }
   }
+
+  // === WALL OBSTACLES (ceiling pillars) ===
+  for (let w = 0; w < cfg.wallObstacles; w++) {
+    const wc = rand(6, COLS - 6);
+    if (spine.some(wp => wc >= wp.colStart && wc <= wp.colEnd)) continue;
+    const wh = rand(2, 4);
+    for (let h = 0; h < wh; h++) {
+      const r = 1 + h;
+      if (grid[r][wc] === BlockType.EMPTY) grid[r][wc] = BlockType.WALL;
+    }
+  }
+
+  // === EXTRA PLATFORMS ===
+  for (let b = 0; b < cfg.extraBranches; b++) {
+    const pr = rand(ROWS - 7, ROWS - 4);
+    const pl = rand(2, 4);
+    const pc = rand(3, COLS - 4 - pl);
+    for (let c = pc; c < pc + pl; c++) {
+      if (grid[pr][c] === BlockType.EMPTY) grid[pr][c] = BlockType.PLATFORM;
+    }
+  }
+
+  // === SPAWN & DOOR ===
+  grid[floorRow][2] = BlockType.SPAWN;
+  grid[floorRow][COLS - 3] = BlockType.DOOR;
 
   // === ENEMIES ===
-  for (const sec of sections) {
-    if (sec.type === 'flat' || sec.type === 'raised') {
-      const groundRow = sec.type === 'raised' ? floorRow - rand(2, 3) : floorRow;
-      if (chance(config.patrolChance) && sec.endCol - sec.startCol >= 3) {
-        const ec = rand(sec.startCol + 1, sec.endCol - 1);
-        if (ec > 0 && ec < COLS - 1 && grid[groundRow][ec] === BlockType.EMPTY) {
-          grid[groundRow][ec] = BlockType.MOB_PATROL;
-        }
-      }
-      if (chance(config.mageChance)) {
-        const ec = rand(sec.startCol, sec.endCol);
-        if (ec > 0 && ec < COLS - 1 && grid[groundRow][ec] === BlockType.EMPTY) {
-          grid[groundRow][ec] = BlockType.MOB_STATIONARY;
-        }
-      }
+  for (const wp of spine) {
+    if (wp.colStart <= 4 || wp.colEnd >= COLS - 4) continue;
+    const above = wp.row - 1;
+    const width = wp.colEnd - wp.colStart + 1;
+    if (width >= 3 && chance(cfg.patrolChance)) {
+      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
+      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_PATROL;
+    }
+    if (chance(cfg.mageChance)) {
+      const ec = rand(wp.colStart, wp.colEnd);
+      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_STATIONARY;
     }
   }
 
-  // === SPIKES on ground ===
+  // === SPIKES ===
   for (let c = 4; c < COLS - 4; c++) {
-    if (chance(config.spikeChance) && grid[floorRow][c] === BlockType.EMPTY &&
+    if (chance(cfg.spikeChance) && grid[floorRow][c] === BlockType.EMPTY &&
         grid[ROWS - 2][c] === BlockType.WALL) {
       grid[floorRow][c] = BlockType.SPIKE;
     }
   }
 
   // === POTIONS ===
-  for (const sec of sections) {
-    if (chance(config.potionChance) && sec.type !== 'pit') {
-      const pc = rand(sec.startCol, sec.endCol);
-      if (pc > 0 && pc < COLS - 1 && grid[floorRow][pc] === BlockType.EMPTY) {
-        grid[floorRow][pc] = BlockType.POTION;
-      }
+  let potCount = 0;
+  for (const wp of spine) {
+    potCount++;
+    if (potCount % cfg.potionEvery === 0) {
+      const pc = rand(wp.colStart, wp.colEnd);
+      const above = wp.row - 1;
+      if (above > 0 && grid[above][pc] === BlockType.EMPTY) grid[above][pc] = BlockType.POTION;
     }
   }
-
-  // === SPAWN (left) ===
-  grid[floorRow][2] = BlockType.SPAWN;
-
-  // === DOOR (right) ===
-  grid[floorRow][COLS - 3] = BlockType.DOOR;
 
   return grid;
 }
 
-/**
- * Generate a room for the given orientation and difficulty.
- */
+// ============================================================
+// REACHABILITY VERIFICATION (BFS)
+// ============================================================
+
+function verifyReachability(grid: number[][], ROWS: number, COLS: number): boolean {
+  let spawn: [number, number] | null = null;
+  let door: [number, number] | null = null;
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c] === BlockType.SPAWN) spawn = [r, c];
+      if (grid[r][c] === BlockType.DOOR) door = [r, c];
+    }
+  }
+  if (!spawn || !door) return false;
+
+  const canStand = (r: number, c: number): boolean => {
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+    const cell = grid[r][c];
+    if (cell === BlockType.WALL) return false; // inside wall
+    if (r + 1 >= ROWS) return false;
+    const below = grid[r + 1][c];
+    return below === BlockType.WALL || below === BlockType.PLATFORM;
+  };
+
+  const key = (r: number, c: number) => r * COLS + c;
+  const visited = new Set<number>();
+  const queue: [number, number][] = [];
+
+  // Start from spawn and one row above
+  for (const dr of [0, -1]) {
+    const sr = spawn[0] + dr;
+    if (canStand(sr, spawn[1])) {
+      queue.push([sr, spawn[1]]);
+      visited.add(key(sr, spawn[1]));
+    }
+  }
+
+  while (queue.length > 0) {
+    const [r, c] = queue.shift()!;
+
+    // Reached door?
+    if (Math.abs(r - door[0]) <= 1 && c === door[1]) return true;
+
+    const tryVisit = (nr: number, nc: number) => {
+      if (canStand(nr, nc) && !visited.has(key(nr, nc))) {
+        visited.add(key(nr, nc));
+        queue.push([nr, nc]);
+      }
+    };
+
+    // Walk left/right
+    tryVisit(r, c - 1);
+    tryVisit(r, c + 1);
+
+    // Jump up (within physics limits)
+    for (let dr = -1; dr >= -MAX_JUMP_UP; dr--) {
+      for (let dc = -MAX_JUMP_HORIZ; dc <= MAX_JUMP_HORIZ; dc++) {
+        tryVisit(r + dr, c + dc);
+      }
+    }
+
+    // Fall down (check below within horizontal reach)
+    for (let dc = -MAX_JUMP_HORIZ; dc <= MAX_JUMP_HORIZ; dc++) {
+      const nc = c + dc;
+      if (nc < 0 || nc >= COLS) continue;
+      for (let nr = r + 1; nr < ROWS - 1; nr++) {
+        if (grid[nr][nc] === BlockType.WALL) break; // blocked
+        if (canStand(nr, nc)) {
+          tryVisit(nr, nc);
+          break;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+// ============================================================
+// PUBLIC API
+// ============================================================
+
 export function generateRoomForOrientation(
   orientation: MapOrientation,
   difficulty: Difficulty
 ): number[][] {
+  const maxAttempts = 10;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const grid = orientation === 'horizontal'
+      ? generateHorizontalRoom(difficulty)
+      : generateRoom(difficulty);
+
+    const rows = grid.length;
+    const cols = grid[0].length;
+    if (verifyReachability(grid, rows, cols)) {
+      return grid;
+    }
+  }
+  // Fallback: return last attempt (spine-based should nearly always pass)
   return orientation === 'horizontal'
     ? generateHorizontalRoom(difficulty)
     : generateRoom(difficulty);
