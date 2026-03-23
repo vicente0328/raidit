@@ -133,6 +133,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       invulnTimer: 0,
       wallSlideDir: 0 as -1 | 0 | 1, // -1 = sliding left wall, 1 = right wall, 0 = not sliding
       wallJumpCooldown: 0, // frames to ignore horizontal input after wall jump
+      wallKickVx: 0, // horizontal velocity to maintain during wall kick
     };
 
     let walls: { x: number; y: number; w: number; h: number }[] = [];
@@ -292,9 +293,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
 
       // === PHYSICS ===
       const WALL_SLIDE_SPEED = 2;    // max fall speed while wall sliding
-      const WALL_JUMP_VY = -14;      // vertical kick off wall
-      const WALL_JUMP_VX = 8;        // horizontal kick off wall
-      const WALL_JUMP_LOCK = 8;      // frames to lock horizontal input after wall jump
+      const WALL_JUMP_VY = -15;      // vertical kick off wall
+      const WALL_JUMP_VX = 12;       // horizontal kick off wall
+      const WALL_JUMP_LOCK = 12;     // frames to lock horizontal input after wall jump
 
       player.vy += 1.0;
 
@@ -303,9 +304,10 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         player.vy = -4; // cap upward velocity for short hops
       }
 
-      // Wall jump cooldown — temporarily override horizontal input
+      // Wall jump cooldown — lock horizontal input and maintain kick velocity
       if (player.wallJumpCooldown > 0) {
         player.wallJumpCooldown--;
+        player.vx = player.wallKickVx;
       } else {
         if (keys.ArrowLeft) { player.vx = -MOVE_SPEED; player.facingRight = false; }
         else if (keys.ArrowRight) { player.vx = MOVE_SPEED; player.facingRight = true; }
@@ -404,6 +406,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       if (player.wallSlideDir !== 0 && freshJumpPress) {
         player.vy = WALL_JUMP_VY;
         player.vx = -player.wallSlideDir * WALL_JUMP_VX; // kick away from wall
+        player.wallKickVx = player.vx; // preserve kick velocity during cooldown
         player.facingRight = player.wallSlideDir < 0; // face away from wall
         player.wallJumpCooldown = WALL_JUMP_LOCK;
         player.wallSlideDir = 0;
