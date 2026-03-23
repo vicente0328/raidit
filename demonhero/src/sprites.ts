@@ -19,6 +19,10 @@ import gargoyleImg from './assets/sprites/gargoyle.png';
 import slimeImg from './assets/sprites/slime.png';
 import impImg from './assets/sprites/imp.png';
 import skeletonKnightImg from './assets/sprites/skeleton_knight.png';
+import gargoyleAltImg from './assets/sprites/gargoyle_alt.png';
+import slimeAltImg from './assets/sprites/slime_alt.png';
+import impAltImg from './assets/sprites/imp_alt.png';
+import skeletonKnightAltImg from './assets/sprites/skeleton_knight_alt.png';
 import heroWallslideImg from './assets/sprites/hero_wallslide.png';
 
 function loadImage(src: string): HTMLImageElement {
@@ -46,9 +50,13 @@ export const SPRITES = {
   platform: loadImage(platformImg),
   potion: loadImage(potionImg),
   gargoyle: loadImage(gargoyleImg),
+  gargoyleAlt: loadImage(gargoyleAltImg),
   slime: loadImage(slimeImg),
+  slimeAlt: loadImage(slimeAltImg),
   imp: loadImage(impImg),
+  impAlt: loadImage(impAltImg),
   skeletonKnight: loadImage(skeletonKnightImg),
+  skeletonKnightAlt: loadImage(skeletonKnightAltImg),
   heroWallslide: loadImage(heroWallslideImg),
 };
 
@@ -70,6 +78,18 @@ export const ANIM = {
   },
   boss: {
     idle: [SPRITES.boss, SPRITES.bossAlt],
+  },
+  gargoyle: {
+    idle: [SPRITES.gargoyle, SPRITES.gargoyleAlt],
+  },
+  slime: {
+    idle: [SPRITES.slime, SPRITES.slimeAlt],
+  },
+  imp: {
+    idle: [SPRITES.imp, SPRITES.impAlt],
+  },
+  skeletonKnight: {
+    idle: [SPRITES.skeletonKnight, SPRITES.skeletonKnightAlt],
   },
 };
 

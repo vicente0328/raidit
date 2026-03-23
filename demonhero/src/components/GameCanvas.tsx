@@ -1258,7 +1258,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             ctx.shadowColor = '#ef4444';
             ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.2)';
           }
-          ctx.drawImage(SPRITES.gargoyle, e.x, e.y, e.w, e.h);
+          const gf = e.dormant ? 0 : Math.floor(frameCount / 20) % ANIM.gargoyle.idle.length;
+          ctx.drawImage(ANIM.gargoyle.idle[gf], e.x, e.y, e.w, e.h);
         }
 
         // === SLIME RENDERING ===
@@ -1267,7 +1268,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           ctx.shadowBlur = 12;
           ctx.shadowColor = '#22c55e';
           if (e.slimeSize === 1) ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.3)';
-          ctx.drawImage(SPRITES.slime, e.x, e.y + bounce, e.w, e.h);
+          const sf = Math.floor(frameCount / 18) % ANIM.slime.idle.length;
+          ctx.drawImage(ANIM.slime.idle[sf], e.x, e.y + bounce, e.w, e.h);
         }
 
         // === IMP RENDERING ===
@@ -1275,7 +1277,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           const floatY = Math.sin(frameCount * 0.08) * 4;
           ctx.shadowBlur = 10;
           ctx.shadowColor = '#f97316';
-          ctx.drawImage(SPRITES.imp, e.x, e.y + floatY, e.w, e.h);
+          const imf = Math.floor(frameCount / 15) % ANIM.imp.idle.length;
+          ctx.drawImage(ANIM.imp.idle[imf], e.x, e.y + floatY, e.w, e.h);
         }
 
         // === SKELETON KNIGHT RENDERING ===
@@ -1287,7 +1290,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             ctx.scale(-1, 1);
             ctx.translate(-(e.x + e.w / 2), -(e.y + e.h / 2));
           }
-          ctx.drawImage(SPRITES.skeletonKnight, e.x, e.y, e.w, e.h);
+          const skf = Math.floor(frameCount / 22) % ANIM.skeletonKnight.idle.length;
+          ctx.drawImage(ANIM.skeletonKnight.idle[skf], e.x, e.y, e.w, e.h);
         }
 
         // Frozen overlay for any enemy
