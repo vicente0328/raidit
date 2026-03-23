@@ -820,6 +820,21 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             } else {
               e.vx = 0;
             }
+            // Edge detection: don't walk off platforms
+            if (e.vx !== 0 && e.vy === 0) {
+              const gCheckX = e.vx > 0 ? e.x + e.w + 2 : e.x - 2;
+              const gCheckY = e.y + e.h + 4;
+              let gHasFloor = false;
+              for (const w of walls) {
+                if (gCheckX >= w.x && gCheckX <= w.x + w.w && gCheckY >= w.y && gCheckY <= w.y + w.h) { gHasFloor = true; break; }
+              }
+              if (!gHasFloor) {
+                for (const p of platforms) {
+                  if (gCheckX >= p.x && gCheckX <= p.x + p.w && gCheckY >= p.y && gCheckY <= p.y + p.h) { gHasFloor = true; break; }
+                }
+              }
+              if (!gHasFloor) e.vx = 0;
+            }
             e.x += e.vx;
             // Wall collision
             for (const w of walls) {
@@ -921,6 +936,21 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             }
           }
 
+          // Edge detection: don't walk off platforms
+          if (e.vx !== 0 && e.vy === 0) {
+            const skCheckX = e.vx > 0 ? e.x + e.w + 2 : e.x - 2;
+            const skCheckY = e.y + e.h + 4;
+            let skHasFloor = false;
+            for (const w of walls) {
+              if (skCheckX >= w.x && skCheckX <= w.x + w.w && skCheckY >= w.y && skCheckY <= w.y + w.h) { skHasFloor = true; break; }
+            }
+            if (!skHasFloor) {
+              for (const p of platforms) {
+                if (skCheckX >= p.x && skCheckX <= p.x + p.w && skCheckY >= p.y && skCheckY <= p.y + p.h) { skHasFloor = true; break; }
+              }
+            }
+            if (!skHasFloor) e.vx = 0;
+          }
           e.x += e.vx;
           // Friction on lunge
           if (Math.abs(e.vx) > 1.5) e.vx *= 0.92;
