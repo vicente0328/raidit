@@ -132,7 +132,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     // Player — collision box is tight body (1 tile wide, ~1.5 tiles tall), sprite renders at 2 tiles
     const PLAYER_DRAW_W = 2 * T;
     const PLAYER_DRAW_H = 2 * T + 16;
-    const BASE_MAX_HP = 100;
+    const BASE_MAX_HP = 150;
     const MAX_HP = BASE_MAX_HP + bonusMaxHp;
     const MOVE_SPEED = 5 + bonusSpeed;
     const ATK_DAMAGE = 1 + bonusAtk;
