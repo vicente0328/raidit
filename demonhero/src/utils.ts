@@ -33,12 +33,12 @@ export const createFloorGrid = () => {
   }
 
   // Platforms at various heights
-  for (let c = 3; c <= 8; c++) grid[34][c] = BlockType.WALL;
-  for (let c = 8; c <= 13; c++) grid[28][c] = BlockType.WALL;
-  for (let c = 2; c <= 7; c++) grid[22][c] = BlockType.WALL;
-  for (let c = 7; c <= 13; c++) grid[16][c] = BlockType.WALL;
-  for (let c = 3; c <= 9; c++) grid[10][c] = BlockType.WALL;
-  for (let c = 4; c <= 11; c++) grid[5][c] = BlockType.WALL;
+  for (let c = 3; c <= 8; c++) grid[34][c] = BlockType.PLATFORM;
+  for (let c = 8; c <= 13; c++) grid[28][c] = BlockType.PLATFORM;
+  for (let c = 2; c <= 7; c++) grid[22][c] = BlockType.PLATFORM;
+  for (let c = 7; c <= 13; c++) grid[16][c] = BlockType.PLATFORM;
+  for (let c = 3; c <= 9; c++) grid[10][c] = BlockType.PLATFORM;
+  for (let c = 4; c <= 11; c++) grid[5][c] = BlockType.PLATFORM;
 
   // Top ceiling
   for (let c = 0; c < TOWER_COLS; c++) {
@@ -75,9 +75,9 @@ export const createHorizontalFloorGrid = () => {
   }
 
   // Some platforms spread horizontally
-  for (let c = 6; c <= 12; c++) grid[10][c] = BlockType.WALL;
-  for (let c = 16; c <= 22; c++) grid[8][c] = BlockType.WALL;
-  for (let c = 26; c <= 32; c++) grid[10][c] = BlockType.WALL;
+  for (let c = 6; c <= 12; c++) grid[10][c] = BlockType.PLATFORM;
+  for (let c = 16; c <= 22; c++) grid[8][c] = BlockType.PLATFORM;
+  for (let c = 26; c <= 32; c++) grid[10][c] = BlockType.PLATFORM;
 
   // Spawn on left
   grid[HORIZ_ROWS - 3][2] = BlockType.SPAWN;
