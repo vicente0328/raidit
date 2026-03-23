@@ -31,7 +31,6 @@ interface DiffConfig {
   impChance: number;
   skeletonChance: number;
   potionEvery: number;
-  useOneWay: number;
   extraBranches: number;
   wallObstacles: number;
 }
@@ -42,19 +41,19 @@ function getConfig(d: Difficulty): DiffConfig {
       minPlatLen: 5, maxPlatLen: 10, stepUpRows: 2,
       spikeChance: 0.04, patrolChance: 0.15, mageChance: 0.03,
       gargoyleChance: 0.02, slimeChance: 0.05, impChance: 0.02, skeletonChance: 0,
-      potionEvery: 3, useOneWay: 0.85, extraBranches: 4, wallObstacles: 0,
+      potionEvery: 3, extraBranches: 4, wallObstacles: 0,
     };
     case 'normal': return {
       minPlatLen: 4, maxPlatLen: 8, stepUpRows: 2,
       spikeChance: 0.1, patrolChance: 0.3, mageChance: 0.1,
       gargoyleChance: 0.08, slimeChance: 0.12, impChance: 0.08, skeletonChance: 0.06,
-      potionEvery: 5, useOneWay: 0.8, extraBranches: 3, wallObstacles: 1,
+      potionEvery: 5, extraBranches: 3, wallObstacles: 1,
     };
     case 'hard': return {
       minPlatLen: 3, maxPlatLen: 6, stepUpRows: 2,
       spikeChance: 0.18, patrolChance: 0.4, mageChance: 0.2,
       gargoyleChance: 0.15, slimeChance: 0.18, impChance: 0.15, skeletonChance: 0.12,
-      potionEvery: 7, useOneWay: 0.7, extraBranches: 2, wallObstacles: 1,
+      potionEvery: 7, extraBranches: 2, wallObstacles: 1,
     };
   }
 }
@@ -146,12 +145,11 @@ export function generateRoom(difficulty: Difficulty): number[][] {
   // === SPINE ===
   const spine = buildVerticalSpine(cfg);
 
-  // Place spine platforms (skip first = floor)
+  // Place spine platforms (skip first = floor) — always one-way platforms, never walls
   for (let i = 1; i < spine.length; i++) {
     const wp = spine[i];
-    const oneWay = chance(cfg.useOneWay);
     for (let c = wp.colStart; c <= wp.colEnd; c++) {
-      grid[wp.row][c] = oneWay ? BlockType.PLATFORM : BlockType.WALL;
+      grid[wp.row][c] = BlockType.PLATFORM;
     }
   }
 
@@ -181,7 +179,7 @@ export function generateRoom(difficulty: Difficulty): number[][] {
     }
   }
 
-  // === WALL OBSTACLES ===
+  // === EXTRA SIDE PLATFORMS (replaces wall obstacles) ===
   for (let w = 0; w < cfg.wallObstacles; w++) {
     const obsRow = rand(4, ROWS - 6);
     if (spine.some(wp => Math.abs(wp.row - obsRow) <= 1)) continue;
@@ -189,46 +187,49 @@ export function generateRoom(difficulty: Difficulty): number[][] {
     const obsLen = rand(1, 3);
     for (let j = 0; j < obsLen; j++) {
       const c = fromLeft ? 1 + j : COLS - 2 - j;
-      if (grid[obsRow][c] === BlockType.EMPTY) grid[obsRow][c] = BlockType.WALL;
+      if (grid[obsRow][c] === BlockType.EMPTY) grid[obsRow][c] = BlockType.PLATFORM;
     }
   }
 
-  // === ENEMIES ===
+  // === ENEMIES (round-robin to ensure variety) ===
+  const mobPool = [
+    { type: BlockType.MOB_PATROL, minW: 4, inset: 1 },
+    { type: BlockType.MOB_STATIONARY, minW: 1, inset: 0 },
+    { type: BlockType.MOB_GARGOYLE, minW: 1, inset: 0 },
+    { type: BlockType.MOB_SLIME, minW: 3, inset: 1 },
+    { type: BlockType.MOB_IMP, minW: 1, inset: 0 },
+    { type: BlockType.MOB_SKELETON, minW: 4, inset: 1 },
+  ];
+  let mobIdx = rand(0, mobPool.length - 1); // random start
+  const mobChance = (cfg.patrolChance + cfg.mageChance + cfg.gargoyleChance +
+    cfg.slimeChance + cfg.impChance + cfg.skeletonChance) / 6; // average spawn rate
   for (let i = 1; i < spine.length; i++) {
     const wp = spine[i];
     const pw = wp.colEnd - wp.colStart + 1;
     const above = wp.row - 1;
 
-    if (pw >= 4 && chance(cfg.patrolChance)) {
-      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
-      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_PATROL;
-    }
-    if (chance(cfg.mageChance)) {
-      const ec = rand(wp.colStart, wp.colEnd);
-      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_STATIONARY;
-    }
-    // New monsters
-    if (chance(cfg.gargoyleChance)) {
-      const ec = rand(wp.colStart, wp.colEnd);
-      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_GARGOYLE;
-    }
-    if (pw >= 3 && chance(cfg.slimeChance)) {
-      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
-      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SLIME;
-    }
-    if (chance(cfg.impChance)) {
-      const ec = rand(wp.colStart, wp.colEnd);
-      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_IMP;
-    }
-    if (pw >= 4 && chance(cfg.skeletonChance)) {
-      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
-      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SKELETON;
+    if (chance(mobChance)) {
+      // Try up to mobPool.length times to find a fitting mob
+      for (let t = 0; t < mobPool.length; t++) {
+        const mob = mobPool[(mobIdx + t) % mobPool.length];
+        if (pw >= mob.minW) {
+          const ecMin = wp.colStart + mob.inset;
+          const ecMax = wp.colEnd - mob.inset;
+          const ec = rand(ecMin, Math.max(ecMin, ecMax));
+          if (grid[above][ec] === BlockType.EMPTY) {
+            grid[above][ec] = mob.type;
+            mobIdx = (mobIdx + t + 1) % mobPool.length; // advance past used mob
+            break;
+          }
+        }
+      }
     }
   }
-  // Ground patrol
-  if (chance(cfg.patrolChance * 1.5)) {
+  // Ground patrol (random type)
+  if (chance(mobChance * 1.5)) {
+    const groundMob = pick(mobPool.filter(m => m.minW <= (COLS - 8)));
     const ec = rand(6, COLS - 4);
-    if (grid[ROWS - 3][ec] === BlockType.EMPTY) grid[ROWS - 3][ec] = BlockType.MOB_PATROL;
+    if (grid[ROWS - 3][ec] === BlockType.EMPTY) grid[ROWS - 3][ec] = groundMob.type;
   }
 
   // === SPIKES (never block only landing path) ===
@@ -362,10 +363,9 @@ export function generateHorizontalRoom(difficulty: Difficulty): number[][] {
     if (wp.row === floorRow) {
       for (let c = wp.colStart; c <= wp.colEnd; c++) floorCols.add(c);
     } else {
-      const oneWay = chance(cfg.useOneWay);
       for (let c = wp.colStart; c <= wp.colEnd; c++) {
         if (grid[wp.row][c] === BlockType.EMPTY) {
-          grid[wp.row][c] = oneWay ? BlockType.PLATFORM : BlockType.WALL;
+          grid[wp.row][c] = BlockType.PLATFORM;
         }
       }
     }
@@ -408,34 +408,37 @@ export function generateHorizontalRoom(difficulty: Difficulty): number[][] {
   grid[floorRow][2] = BlockType.SPAWN;
   grid[floorRow][COLS - 3] = BlockType.DOOR;
 
-  // === ENEMIES ===
+  // === ENEMIES (round-robin for variety) ===
+  const hMobPool = [
+    { type: BlockType.MOB_PATROL, minW: 3, inset: 1 },
+    { type: BlockType.MOB_STATIONARY, minW: 1, inset: 0 },
+    { type: BlockType.MOB_GARGOYLE, minW: 1, inset: 0 },
+    { type: BlockType.MOB_SLIME, minW: 3, inset: 1 },
+    { type: BlockType.MOB_IMP, minW: 1, inset: 0 },
+    { type: BlockType.MOB_SKELETON, minW: 4, inset: 1 },
+  ];
+  let hMobIdx = rand(0, hMobPool.length - 1);
+  const hMobChance = (cfg.patrolChance + cfg.mageChance + cfg.gargoyleChance +
+    cfg.slimeChance + cfg.impChance + cfg.skeletonChance) / 6;
   for (const wp of spine) {
     if (wp.colStart <= 4 || wp.colEnd >= COLS - 4) continue;
     const above = wp.row - 1;
     const width = wp.colEnd - wp.colStart + 1;
-    if (width >= 3 && chance(cfg.patrolChance)) {
-      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
-      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_PATROL;
-    }
-    if (chance(cfg.mageChance)) {
-      const ec = rand(wp.colStart, wp.colEnd);
-      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_STATIONARY;
-    }
-    if (chance(cfg.gargoyleChance)) {
-      const ec = rand(wp.colStart, wp.colEnd);
-      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_GARGOYLE;
-    }
-    if (width >= 3 && chance(cfg.slimeChance)) {
-      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
-      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SLIME;
-    }
-    if (chance(cfg.impChance)) {
-      const ec = rand(wp.colStart, wp.colEnd);
-      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_IMP;
-    }
-    if (width >= 4 && chance(cfg.skeletonChance)) {
-      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
-      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SKELETON;
+
+    if (chance(hMobChance)) {
+      for (let t = 0; t < hMobPool.length; t++) {
+        const mob = hMobPool[(hMobIdx + t) % hMobPool.length];
+        if (width >= mob.minW) {
+          const ecMin = wp.colStart + mob.inset;
+          const ecMax = wp.colEnd - mob.inset;
+          const ec = rand(ecMin, Math.max(ecMin, ecMax));
+          if (above > 0 && grid[above][ec] === BlockType.EMPTY) {
+            grid[above][ec] = mob.type;
+            hMobIdx = (hMobIdx + t + 1) % hMobPool.length;
+            break;
+          }
+        }
+      }
     }
   }
 
