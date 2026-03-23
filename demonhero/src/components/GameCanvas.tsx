@@ -1243,65 +1243,15 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         // === GARGOYLE RENDERING ===
         if (e.type === BlockType.MOB_GARGOYLE) {
           if (e.dormant) {
-            // Stone statue look — grey, no glow
             ctx.shadowBlur = 5;
             ctx.shadowColor = '#52525b';
             ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'saturate(0) brightness(0.7)';
-            // Draw a stone gargoyle shape
-            ctx.fillStyle = '#71717a';
-            const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
-            ctx.beginPath();
-            ctx.moveTo(cx, e.y + 4);
-            ctx.lineTo(e.x + e.w - 4, e.y + e.h * 0.4);
-            ctx.lineTo(e.x + e.w - 8, e.y + e.h - 4);
-            ctx.lineTo(e.x + 8, e.y + e.h - 4);
-            ctx.lineTo(e.x + 4, e.y + e.h * 0.4);
-            ctx.closePath();
-            ctx.fill();
-            // Eyes (dim)
-            if (e.awakenTimer > 0) {
-              const intensity = e.awakenTimer / 30;
-              ctx.fillStyle = `rgba(239, 68, 68, ${intensity})`;
-              ctx.fillRect(cx - 12, cy - 8, 6, 4);
-              ctx.fillRect(cx + 6, cy - 8, 6, 4);
-            }
           } else {
-            // Active gargoyle — red glow
             ctx.shadowBlur = 18;
             ctx.shadowColor = '#ef4444';
-            ctx.fillStyle = '#a1a1aa';
-            const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
-            // Body
-            ctx.beginPath();
-            ctx.moveTo(cx, e.y + 4);
-            ctx.lineTo(e.x + e.w - 4, e.y + e.h * 0.4);
-            ctx.lineTo(e.x + e.w - 8, e.y + e.h - 4);
-            ctx.lineTo(e.x + 8, e.y + e.h - 4);
-            ctx.lineTo(e.x + 4, e.y + e.h * 0.4);
-            ctx.closePath();
-            ctx.fill();
-            // Wings (flapping)
-            const wingFlap = Math.sin(frameCount * 0.15) * 8;
-            ctx.fillStyle = '#78716c';
-            ctx.beginPath();
-            ctx.moveTo(e.x + 8, cy - 4);
-            ctx.lineTo(e.x - 15, cy - 20 + wingFlap);
-            ctx.lineTo(e.x - 5, cy + 10);
-            ctx.closePath();
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(e.x + e.w - 8, cy - 4);
-            ctx.lineTo(e.x + e.w + 15, cy - 20 - wingFlap);
-            ctx.lineTo(e.x + e.w + 5, cy + 10);
-            ctx.closePath();
-            ctx.fill();
-            // Red eyes
-            ctx.fillStyle = '#ef4444';
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = '#ef4444';
-            ctx.fillRect(cx - 12, cy - 8, 6, 4);
-            ctx.fillRect(cx + 6, cy - 8, 6, 4);
+            ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.2)';
           }
+          ctx.drawImage(SPRITES.gargoyle, e.x, e.y, e.w, e.h);
         }
 
         // === SLIME RENDERING ===
@@ -1309,118 +1259,28 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           const bounce = Math.sin(frameCount * 0.1) * 3;
           ctx.shadowBlur = 12;
           ctx.shadowColor = '#22c55e';
-          ctx.fillStyle = e.slimeSize === 2 ? '#4ade80' : '#86efac';
-          // Blobby body
-          const sx = e.x, sy = e.y + bounce, sw = e.w, sh = e.h;
-          ctx.beginPath();
-          ctx.ellipse(sx + sw / 2, sy + sh * 0.6, sw / 2, sh * 0.45, 0, 0, Math.PI * 2);
-          ctx.fill();
-          // Highlight
-          ctx.fillStyle = 'rgba(255,255,255,0.3)';
-          ctx.beginPath();
-          ctx.ellipse(sx + sw * 0.35, sy + sh * 0.4, sw * 0.15, sh * 0.12, -0.3, 0, Math.PI * 2);
-          ctx.fill();
-          // Eyes
-          ctx.fillStyle = '#1a1a2e';
-          ctx.fillRect(sx + sw * 0.3, sy + sh * 0.5, 5, 5);
-          ctx.fillRect(sx + sw * 0.6, sy + sh * 0.5, 5, 5);
+          if (e.slimeSize === 1) ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'brightness(1.3)';
+          ctx.drawImage(SPRITES.slime, e.x, e.y + bounce, e.w, e.h);
         }
 
         // === IMP RENDERING ===
         if (e.type === BlockType.MOB_IMP) {
+          const floatY = Math.sin(frameCount * 0.08) * 4;
           ctx.shadowBlur = 10;
           ctx.shadowColor = '#f97316';
-          const wingFlap = Math.sin(frameCount * 0.2) * 6;
-          // Body
-          ctx.fillStyle = '#dc2626';
-          ctx.beginPath();
-          ctx.ellipse(e.x + e.w / 2, e.y + e.h * 0.55, e.w * 0.35, e.h * 0.4, 0, 0, Math.PI * 2);
-          ctx.fill();
-          // Wings
-          ctx.fillStyle = '#991b1b';
-          ctx.beginPath();
-          ctx.moveTo(e.x + e.w * 0.2, e.y + e.h * 0.4);
-          ctx.lineTo(e.x - 8, e.y + e.h * 0.2 + wingFlap);
-          ctx.lineTo(e.x + 4, e.y + e.h * 0.6);
-          ctx.closePath();
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(e.x + e.w * 0.8, e.y + e.h * 0.4);
-          ctx.lineTo(e.x + e.w + 8, e.y + e.h * 0.2 - wingFlap);
-          ctx.lineTo(e.x + e.w - 4, e.y + e.h * 0.6);
-          ctx.closePath();
-          ctx.fill();
-          // Horns
-          ctx.fillStyle = '#7f1d1d';
-          ctx.beginPath();
-          ctx.moveTo(e.x + e.w * 0.3, e.y + e.h * 0.25);
-          ctx.lineTo(e.x + e.w * 0.2, e.y);
-          ctx.lineTo(e.x + e.w * 0.4, e.y + e.h * 0.3);
-          ctx.closePath();
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(e.x + e.w * 0.7, e.y + e.h * 0.25);
-          ctx.lineTo(e.x + e.w * 0.8, e.y);
-          ctx.lineTo(e.x + e.w * 0.6, e.y + e.h * 0.3);
-          ctx.closePath();
-          ctx.fill();
-          // Eyes
-          ctx.fillStyle = '#fbbf24';
-          ctx.shadowBlur = 6;
-          ctx.shadowColor = '#fbbf24';
-          ctx.fillRect(e.x + e.w * 0.3, e.y + e.h * 0.4, 4, 4);
-          ctx.fillRect(e.x + e.w * 0.6, e.y + e.h * 0.4, 4, 4);
+          ctx.drawImage(SPRITES.imp, e.x, e.y + floatY, e.w, e.h);
         }
 
         // === SKELETON KNIGHT RENDERING ===
         if (e.type === BlockType.MOB_SKELETON) {
           ctx.shadowBlur = 10;
-          ctx.shadowColor = '#a1a1aa';
-          // Flip based on facing
+          ctx.shadowColor = e.shieldUp ? '#a1a1aa' : '#ef4444';
           if (!e.facingRight) {
             ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
             ctx.scale(-1, 1);
             ctx.translate(-(e.x + e.w / 2), -(e.y + e.h / 2));
           }
-          // Body (bone colored)
-          ctx.fillStyle = '#d4d4d8';
-          ctx.fillRect(e.x + e.w * 0.25, e.y + e.h * 0.1, e.w * 0.5, e.h * 0.8);
-          // Head (skull)
-          ctx.fillStyle = '#e4e4e7';
-          ctx.beginPath();
-          ctx.arc(e.x + e.w / 2, e.y + e.h * 0.2, e.w * 0.25, 0, Math.PI * 2);
-          ctx.fill();
-          // Eye sockets
-          ctx.fillStyle = '#18181b';
-          ctx.fillRect(e.x + e.w * 0.35, e.y + e.h * 0.15, 6, 5);
-          ctx.fillRect(e.x + e.w * 0.55, e.y + e.h * 0.15, 6, 5);
-          // Red eye glow
-          ctx.fillStyle = '#ef4444';
-          ctx.shadowBlur = 4;
-          ctx.shadowColor = '#ef4444';
-          ctx.fillRect(e.x + e.w * 0.36, e.y + e.h * 0.16, 4, 3);
-          ctx.fillRect(e.x + e.w * 0.56, e.y + e.h * 0.16, 4, 3);
-          ctx.shadowBlur = 0;
-          // Shield (left side = front)
-          if (e.shieldUp) {
-            ctx.fillStyle = '#854d0e';
-            ctx.fillRect(e.x + 2, e.y + e.h * 0.2, e.w * 0.2, e.h * 0.5);
-            ctx.strokeStyle = '#a16207';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(e.x + 2, e.y + e.h * 0.2, e.w * 0.2, e.h * 0.5);
-          } else {
-            // Attack wind-up — sword raised
-            ctx.fillStyle = '#a1a1aa';
-            const swordSwing = Math.sin(e.attackTimer * 0.2) * 15;
-            ctx.save();
-            ctx.translate(e.x + e.w * 0.8, e.y + e.h * 0.3);
-            ctx.rotate(-0.5 + swordSwing * 0.02);
-            ctx.fillRect(-3, -25, 6, 30);
-            ctx.restore();
-          }
-          // Sword (right side)
-          ctx.fillStyle = '#71717a';
-          ctx.fillRect(e.x + e.w * 0.75, e.y + e.h * 0.3, 4, e.h * 0.35);
+          ctx.drawImage(SPRITES.skeletonKnight, e.x, e.y, e.w, e.h);
         }
 
         // Frozen overlay for any enemy
@@ -1562,9 +1422,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         const drawX = player.x + player.w / 2 - PLAYER_DRAW_W / 2;
         const drawY = player.y + player.h - PLAYER_DRAW_H;
 
-        // During wall slide, face away from wall
+        // During wall slide, face toward the wall (sprite faces wall)
         const renderFacingRight = player.wallSlideDir !== 0
-          ? player.wallSlideDir < 0   // on left wall → face right
+          ? player.wallSlideDir > 0   // on right wall → face right (toward wall)
           : player.facingRight;
 
         if (!renderFacingRight) {
