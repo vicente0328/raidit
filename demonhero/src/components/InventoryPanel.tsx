@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function InventoryPanel({ inventory, equipment, onUseItem, onEquipItem, onUnequipItem, onClose, mode }: Props) {
-  const slots: EquipSlot[] = ['weapon', 'armor', 'boots'];
+  const slots: EquipSlot[] = ['weapon', 'armor', 'boots', 'accessory'];
 
   const consumables = inventory.filter(i => {
     const def = getItem(i.itemId);
@@ -44,7 +44,7 @@ export function InventoryPanel({ inventory, equipment, onUseItem, onEquipItem, o
         {/* Equipment Slots */}
         <div className="mb-4">
           <p className="text-[10px] font-semibold text-[#52525b] uppercase tracking-[0.15em] mb-2">장착 중</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {slots.map(slot => {
               const equippedId = equipment[slot];
               const item = equippedId ? getItem(equippedId) : null;

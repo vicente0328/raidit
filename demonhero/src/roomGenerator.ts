@@ -26,6 +26,10 @@ interface DiffConfig {
   spikeChance: number;
   patrolChance: number;
   mageChance: number;
+  gargoyleChance: number;
+  slimeChance: number;
+  impChance: number;
+  skeletonChance: number;
   potionEvery: number;
   useOneWay: number;
   extraBranches: number;
@@ -37,16 +41,19 @@ function getConfig(d: Difficulty): DiffConfig {
     case 'easy': return {
       minPlatLen: 5, maxPlatLen: 10, stepUpRows: 2,
       spikeChance: 0.04, patrolChance: 0.15, mageChance: 0.03,
+      gargoyleChance: 0.02, slimeChance: 0.05, impChance: 0.02, skeletonChance: 0,
       potionEvery: 3, useOneWay: 0.85, extraBranches: 4, wallObstacles: 0,
     };
     case 'normal': return {
       minPlatLen: 4, maxPlatLen: 8, stepUpRows: 2,
       spikeChance: 0.1, patrolChance: 0.3, mageChance: 0.1,
+      gargoyleChance: 0.08, slimeChance: 0.12, impChance: 0.08, skeletonChance: 0.06,
       potionEvery: 5, useOneWay: 0.8, extraBranches: 3, wallObstacles: 1,
     };
     case 'hard': return {
       minPlatLen: 3, maxPlatLen: 6, stepUpRows: 2,
       spikeChance: 0.18, patrolChance: 0.4, mageChance: 0.2,
+      gargoyleChance: 0.15, slimeChance: 0.18, impChance: 0.15, skeletonChance: 0.12,
       potionEvery: 7, useOneWay: 0.7, extraBranches: 2, wallObstacles: 1,
     };
   }
@@ -199,6 +206,23 @@ export function generateRoom(difficulty: Difficulty): number[][] {
     if (chance(cfg.mageChance)) {
       const ec = rand(wp.colStart, wp.colEnd);
       if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_STATIONARY;
+    }
+    // New monsters
+    if (chance(cfg.gargoyleChance)) {
+      const ec = rand(wp.colStart, wp.colEnd);
+      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_GARGOYLE;
+    }
+    if (pw >= 3 && chance(cfg.slimeChance)) {
+      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
+      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SLIME;
+    }
+    if (chance(cfg.impChance)) {
+      const ec = rand(wp.colStart, wp.colEnd);
+      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_IMP;
+    }
+    if (pw >= 4 && chance(cfg.skeletonChance)) {
+      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
+      if (grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SKELETON;
     }
   }
   // Ground patrol
@@ -396,6 +420,22 @@ export function generateHorizontalRoom(difficulty: Difficulty): number[][] {
     if (chance(cfg.mageChance)) {
       const ec = rand(wp.colStart, wp.colEnd);
       if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_STATIONARY;
+    }
+    if (chance(cfg.gargoyleChance)) {
+      const ec = rand(wp.colStart, wp.colEnd);
+      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_GARGOYLE;
+    }
+    if (width >= 3 && chance(cfg.slimeChance)) {
+      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
+      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SLIME;
+    }
+    if (chance(cfg.impChance)) {
+      const ec = rand(wp.colStart, wp.colEnd);
+      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_IMP;
+    }
+    if (width >= 4 && chance(cfg.skeletonChance)) {
+      const ec = rand(wp.colStart + 1, wp.colEnd - 1);
+      if (above > 0 && grid[above][ec] === BlockType.EMPTY) grid[above][ec] = BlockType.MOB_SKELETON;
     }
   }
 

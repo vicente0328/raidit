@@ -18,6 +18,18 @@ const BLOCK_IMAGES: Record<number, string> = {
   [BlockType.SPAWN]: SPRITE_URLS.spawn,
   [BlockType.PLATFORM]: SPRITE_URLS.platform,
   [BlockType.POTION]: SPRITE_URLS.potion,
+  [BlockType.MOB_GARGOYLE]: SPRITE_URLS.gargoyle,
+  [BlockType.MOB_SLIME]: SPRITE_URLS.slime,
+  [BlockType.MOB_IMP]: SPRITE_URLS.imp,
+  [BlockType.MOB_SKELETON]: SPRITE_URLS.skeletonKnight,
+};
+
+// Color-coded backgrounds for monsters without sprites (used in editor)
+const BLOCK_COLORS: Record<number, string> = {
+  [BlockType.MOB_GARGOYLE]: '#71717a',
+  [BlockType.MOB_SLIME]: '#4ade80',
+  [BlockType.MOB_IMP]: '#dc2626',
+  [BlockType.MOB_SKELETON]: '#d4d4d8',
 };
 
 const BLOCK_NAMES: Record<number, string> = {
@@ -31,6 +43,10 @@ const BLOCK_NAMES: Record<number, string> = {
   [BlockType.DOOR]: '문',
   [BlockType.SPAWN]: '소환진',
   [BlockType.POTION]: '물약',
+  [BlockType.MOB_GARGOYLE]: '가고일',
+  [BlockType.MOB_SLIME]: '슬라임',
+  [BlockType.MOB_IMP]: '임프',
+  [BlockType.MOB_SKELETON]: '해골기사',
 };
 
 const BLOCK_NAMES_FULL: Record<number, string> = {
@@ -44,6 +60,10 @@ const BLOCK_NAMES_FULL: Record<number, string> = {
   [BlockType.DOOR]: '고대의 문',
   [BlockType.SPAWN]: '소환진',
   [BlockType.POTION]: '회복 물약 (HP +30)',
+  [BlockType.MOB_GARGOYLE]: '가고일 (근접 시 활성화)',
+  [BlockType.MOB_SLIME]: '슬라임 (분열)',
+  [BlockType.MOB_IMP]: '임프 (비행, 원거리)',
+  [BlockType.MOB_SKELETON]: '해골 기사 (방패, 강공격)',
 };
 
 interface Props {
@@ -239,7 +259,7 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
       <div className="relative w-full h-[100dvh] bg-[#09090b] overflow-hidden flex flex-col items-center justify-center">
         <GameCanvas
           level={{ id: 'test', name: '테스트 플레이', creator: '마왕 (테스트)', creatorId: 'test', infamy: 0, clears: 0, attempts: 0, rooms, orientation }}
-          stats={{ fame: 0, infamy: 0, inventory: [], equipment: { weapon: null, armor: null, boots: null } }}
+          stats={{ fame: 0, infamy: 0, inventory: [], equipment: { weapon: null, armor: null, boots: null, accessory: null } }}
           onWin={() => { setHasClearedTest(true); setIsTesting(false); setMessage({ text: '테스트 클리어! 이제 저장할 수 있습니다.', type: 'success' }); }}
           onLose={() => { setIsTesting(false); setMessage({ text: '테스트 실패... 난이도를 조절해보세요.', type: 'error' }); }}
           onSaveInventory={async () => {}}
@@ -332,10 +352,11 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
               row.map((cell, c) => (
                 <div
                   key={`${r}-${c}`}
-                  className={`border-r border-b border-[#1f1f23] ${cell === BlockType.EMPTY ? 'bg-transparent' : 'bg-center bg-no-repeat bg-cover'}`}
+                  className={`border-r border-b border-[#1f1f23] ${cell === BlockType.EMPTY ? 'bg-transparent' : 'bg-center bg-no-repeat bg-cover'} relative`}
                   style={{
                     width: cellSize, height: cellSize,
-                    ...(cell !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[cell as BlockType]})` } : {}),
+                    ...(cell !== BlockType.EMPTY && BLOCK_IMAGES[cell as BlockType] ? { backgroundImage: `url(${BLOCK_IMAGES[cell as BlockType]})` } : {}),
+                    ...(BLOCK_COLORS[cell as BlockType] ? { backgroundColor: BLOCK_COLORS[cell as BlockType] } : {}),
                   }}
                 />
               ))
@@ -365,7 +386,10 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
                     className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all ${isSelected ? 'bg-[#c084fc]/10 border border-[#c084fc]/30' : 'bg-[#18181b] border border-[#27272a]'}`}
                   >
                     <div className={`w-8 h-8 rounded flex-shrink-0 ${typeNum === BlockType.EMPTY ? 'border border-dashed border-[#3f3f46]' : 'bg-center bg-no-repeat bg-cover'}`}
-                      style={typeNum !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : undefined} />
+                      style={{
+                        ...(typeNum !== BlockType.EMPTY && BLOCK_IMAGES[typeNum] ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : {}),
+                        ...(BLOCK_COLORS[typeNum] ? { backgroundColor: BLOCK_COLORS[typeNum] } : {}),
+                      }} />
                     <span className="text-[10px] text-[#71717a] leading-tight">{name}</span>
                   </button>
                 );
@@ -383,7 +407,10 @@ export function LevelEditor({ onSave, onCancel, initialRooms, orientation }: Pro
                     className={`flex-shrink-0 w-10 h-10 rounded-md transition-all ${
                       isSelected ? 'bg-[#c084fc]/10 border-2 border-[#c084fc]/40 scale-110' : 'bg-[#18181b] border border-[#27272a]'
                     } ${typeNum === BlockType.EMPTY ? '' : 'bg-center bg-no-repeat bg-cover'}`}
-                    style={typeNum !== BlockType.EMPTY ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : undefined}
+                    style={{
+                      ...(typeNum !== BlockType.EMPTY && BLOCK_IMAGES[typeNum] ? { backgroundImage: `url(${BLOCK_IMAGES[typeNum]})` } : {}),
+                      ...(BLOCK_COLORS[typeNum] ? { backgroundColor: BLOCK_COLORS[typeNum] } : {}),
+                    }}
                   >
                     {typeNum === BlockType.EMPTY && <span className="text-[#52525b] text-lg">+</span>}
                   </button>

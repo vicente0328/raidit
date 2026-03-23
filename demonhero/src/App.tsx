@@ -11,7 +11,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot, setDoc, updateDoc, deleteDoc, increment, query, orderBy } from 'firebase/firestore';
 import { rollReward, getItem, RARITY_COLORS } from './items';
 
-const DEFAULT_EQUIPMENT: Equipment = { weapon: null, armor: null, boots: null };
+const DEFAULT_EQUIPMENT: Equipment = { weapon: null, armor: null, boots: null, accessory: null };
 
 const DEFAULT_LEVEL: LevelData = {
   id: 'default-1',
@@ -109,7 +109,7 @@ export default function App() {
           let inventory: InventoryItem[] = [];
           let equipment: Equipment = DEFAULT_EQUIPMENT;
           try { inventory = data.inventory ? JSON.parse(data.inventory) : []; } catch {}
-          try { equipment = data.equipment ? JSON.parse(data.equipment) : DEFAULT_EQUIPMENT; } catch {}
+          try { equipment = data.equipment ? { ...DEFAULT_EQUIPMENT, ...JSON.parse(data.equipment) } : DEFAULT_EQUIPMENT; } catch {}
           setStats({
             fame: data.fame || 0,
             infamy: data.infamy || 0,

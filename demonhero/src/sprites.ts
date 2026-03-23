@@ -15,6 +15,11 @@ import floorImg from './assets/sprites/floor.png';
 import spawnImg from './assets/sprites/spawn.png';
 import platformImg from './assets/sprites/platform.png';
 import potionImg from './assets/sprites/potion.png';
+import gargoyleImg from './assets/sprites/gargoyle.png';
+import slimeImg from './assets/sprites/slime.png';
+import impImg from './assets/sprites/imp.png';
+import skeletonKnightImg from './assets/sprites/skeleton_knight.png';
+import heroWallslideImg from './assets/sprites/hero_wallslide.png';
 
 function loadImage(src: string): HTMLImageElement {
   const img = new Image();
@@ -40,6 +45,11 @@ export const SPRITES = {
   spawn: loadImage(spawnImg),
   platform: loadImage(platformImg),
   potion: loadImage(potionImg),
+  gargoyle: loadImage(gargoyleImg),
+  slime: loadImage(slimeImg),
+  imp: loadImage(impImg),
+  skeletonKnight: loadImage(skeletonKnightImg),
+  heroWallslide: loadImage(heroWallslideImg),
 };
 
 // Animation frame sets for cycling
@@ -48,6 +58,7 @@ export const ANIM = {
     idle: [SPRITES.hero],
     run: [SPRITES.heroRun1, SPRITES.heroRun2],
     attack: [SPRITES.heroAtk],
+    wallslide: [SPRITES.heroWallslide],
   },
   patrol: {
     idle: [SPRITES.patrol],
@@ -75,4 +86,8 @@ export const SPRITE_URLS = {
   spawn: spawnImg,
   platform: platformImg,
   potion: potionImg,
+  gargoyle: gargoyleImg,
+  slime: slimeImg,
+  imp: impImg,
+  skeletonKnight: skeletonKnightImg,
 };

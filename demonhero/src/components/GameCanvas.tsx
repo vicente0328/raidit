@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { SPRITES, ANIM } from '../sprites';
 // Grid dimensions are read dynamically from level data
 import { getItem } from '../items';
+import { rollDrop } from '../lootTables';
 import { InventoryPanel } from './InventoryPanel';
 
 interface Props {
@@ -102,7 +103,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
 
     // Compute equipment bonuses
     let bonusAtk = 0, bonusDef = 0, bonusSpeed = 0, bonusMaxHp = 0;
-    for (const slot of ['weapon', 'armor', 'boots'] as EquipSlot[]) {
+    let lifesteal = 0, freezeChance = 0, aoeRadius = 0, thornsDmg = 0, regenRate = 0;
+    for (const slot of ['weapon', 'armor', 'boots', 'accessory'] as EquipSlot[]) {
       const id = stats.equipment[slot];
       if (id) {
         const item = getItem(id);
@@ -111,6 +113,11 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           bonusDef += item.def || 0;
           bonusSpeed += item.speed || 0;
           bonusMaxHp += item.maxHp || 0;
+          lifesteal += item.lifesteal || 0;
+          freezeChance += item.freezeChance || 0;
+          aoeRadius += item.aoeRadius || 0;
+          thornsDmg += item.thornsDmg || 0;
+          regenRate += item.regenRate || 0;
         }
       }
     }
@@ -142,7 +149,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     let potions: { x: number; y: number; w: number; h: number }[] = [];
     let enemies: any[] = [];
     let projectiles: { x: number; y: number; vx: number; vy: number; w: number; h: number; life: number }[] = [];
+    let droppedItems: { x: number; y: number; w: number; h: number; vy: number; itemId: string; life: number; grounded: boolean }[] = [];
     let door: { x: number; y: number; w: number; h: number } | null = null;
+    let regenTimer = 0;
 
     const loadRoom = (idx: number) => {
       walls = [];
@@ -151,6 +160,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       potions = [];
       enemies = [];
       projectiles = [];
+      droppedItems = [];
       door = null;
       embers = [];
       const grid = level.rooms[idx].grid;
@@ -178,6 +188,26 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             x: x - T, y: y - 2 * T, w: 3 * T, h: 3 * T,
             type: val, hp: 10, maxHp: 10, vx: 0, vy: 0, timer: 0, weak: false, hitFlash: 0,
             homeX: x - T, homeY: y - 2 * T
+          });
+          if (val === BlockType.MOB_GARGOYLE) enemies.push({
+            x, y: y - T, w: 2 * T, h: 2 * T,
+            type: val, hp: 6, maxHp: 6, vx: 0, vy: 0, hitFlash: 0,
+            dormant: true, awakenTimer: 0, defBonus: 10 // high def while dormant
+          });
+          if (val === BlockType.MOB_SLIME) enemies.push({
+            x, y: y - T, w: 2 * T, h: 2 * T,
+            type: val, hp: 4, maxHp: 4, vx: 1.5, vy: 0, hitFlash: 0,
+            slimeSize: 2, splitDone: false // 2=big, 1=small
+          });
+          if (val === BlockType.MOB_IMP) enemies.push({
+            x, y: y - 2 * T, w: T * 1.5, h: T * 1.5,
+            type: val, hp: 2, maxHp: 2, vx: 0, vy: 0, hitFlash: 0,
+            flyTimer: 0, shootTimer: 0, homeX: x, homeY: y - 2 * T
+          });
+          if (val === BlockType.MOB_SKELETON) enemies.push({
+            x, y: y - T, w: 2 * T, h: 2 * T,
+            type: val, hp: 8, maxHp: 8, vx: 1, vy: 0, hitFlash: 0,
+            facingRight: true, shieldUp: true, attackTimer: 0, attackCooldown: 90
           });
           if (val === BlockType.POTION) potions.push({ x, y, w: T, h: T });
           if (val === BlockType.DOOR) door = { x, y, w: T, h: T };
@@ -294,7 +324,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       // === PHYSICS ===
       const WALL_SLIDE_SPEED = 2;    // max fall speed while wall sliding
       const WALL_JUMP_VY = -15;      // vertical kick off wall
-      const WALL_JUMP_VX = 12;       // horizontal kick off wall
+      const WALL_JUMP_VX = 8;        // horizontal kick off wall (reduced 30%)
       const WALL_JUMP_LOCK = 60;     // frames to lock horizontal input (cleared on landing)
 
       player.vy += 1.0;
@@ -409,16 +439,17 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
 
       // Wall jump: press jump while wall sliding
       if (player.wallSlideDir !== 0 && freshJumpPress) {
+        const kickDir = player.wallSlideDir; // save before clearing
         player.vy = WALL_JUMP_VY;
-        player.vx = -player.wallSlideDir * WALL_JUMP_VX; // kick away from wall
+        player.vx = -kickDir * WALL_JUMP_VX; // kick away from wall
         player.wallKickVx = player.vx; // preserve kick velocity during cooldown
-        player.facingRight = player.wallSlideDir < 0; // face away from wall
+        player.facingRight = kickDir < 0; // face away from wall
         player.wallJumpCooldown = WALL_JUMP_LOCK;
         player.wallSlideDir = 0;
         coyoteTimer = 0;
         jumpBufferTimer = 0;
         // Wall kick particles burst
-        const sparkX = player.wallSlideDir === 1 ? player.x + player.w + 4 : player.x - 4;
+        const sparkX = kickDir === 1 ? player.x + player.w + 4 : player.x - 4;
         spawnHitSparks(sparkX, player.y + player.h * 0.5, 5);
         for (let i = 0; i < 4; i++) {
           spawnEmber(sparkX, player.y + player.h * 0.3 + Math.random() * player.h * 0.4, '#71717a');
@@ -489,28 +520,101 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
                 didHitEnemy = true;
               }
             } else {
-              e.hp -= ATK_DAMAGE;
-              e.hitFlash = 8;
-              e.x += knockDir * 20;
-              // Resolve horizontal wall collision after knockback
-              for (const w of walls) {
-                if (checkCol(e, w)) {
-                  if (knockDir > 0) e.x = w.x - e.w;
-                  else e.x = w.x + w.w;
+              // Gargoyle: high defense while dormant
+              if (e.type === BlockType.MOB_GARGOYLE && e.dormant) {
+                // Blocked — spark but no damage
+                spawnHitSparks(hitX, hitY, 4);
+                spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#a1a1aa');
+                didHitEnemy = true;
+                // Awaken immediately when attacked
+                e.awakenTimer = 31;
+              }
+              // Skeleton Knight: shield blocks frontal attacks
+              else if (e.type === BlockType.MOB_SKELETON && e.shieldUp) {
+                const attackFromFront = (player.facingRight && e.facingRight === false) ||
+                  (!player.facingRight && e.facingRight === true);
+                // Actually: shield faces toward player, so block if attack comes from the direction skeleton faces
+                const skeletonFacingAttacker =
+                  (e.facingRight && player.x < e.x) || (!e.facingRight && player.x > e.x + e.w);
+                if (!skeletonFacingAttacker) {
+                  // Shield block!
+                  spawnHitSparks(hitX, hitY, 3);
+                  spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#facc15');
+                  e.x += knockDir * 3;
+                  didHitEnemy = true;
+                } else {
+                  // Hit from behind — takes damage
+                  e.hp -= ATK_DAMAGE;
+                  e.hitFlash = 8;
+                  e.x += knockDir * 10;
+                  for (const w of walls) { if (checkCol(e, w)) { if (knockDir > 0) e.x = w.x - e.w; else e.x = w.x + w.w; } }
+                  e.vy = -3;
+                  spawnHitSparks(hitX, hitY, 8);
+                  for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
+                  didHitEnemy = true;
+                }
+              } else {
+                // Default damage for all other enemies
+                e.hp -= ATK_DAMAGE;
+                e.hitFlash = 8;
+                const kb = e.type === BlockType.MOB_SKELETON ? 10 : 20;
+                e.x += knockDir * kb;
+                // Resolve horizontal wall collision after knockback
+                for (const w of walls) {
+                  if (checkCol(e, w)) {
+                    if (knockDir > 0) e.x = w.x - e.w;
+                    else e.x = w.x + w.w;
+                  }
+                }
+                e.vy = e.type === BlockType.MOB_IMP ? -2 : -4;
+                spawnHitSparks(hitX, hitY, 8);
+                for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
+                didHitEnemy = true;
+
+                // Freeze chance (Frostbow)
+                if (freezeChance > 0 && Math.random() < freezeChance) {
+                  e.frozenTimer = 120; // 2 seconds at 60fps
+                  for (let i = 0; i < 6; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#38bdf8');
                 }
               }
-              e.vy = -4;
-              spawnHitSparks(hitX, hitY, 8);
-              for (let i = 0; i < 5; i++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#ff6b35');
-              didHitEnemy = true;
+
+              // Lifesteal (Vampiric Blade)
+              if (lifesteal > 0 && didHitEnemy && !(e.type === BlockType.MOB_GARGOYLE && e.dormant) &&
+                  !(e.type === BlockType.MOB_SKELETON && e.shieldUp)) {
+                const healAmt = Math.ceil(ATK_DAMAGE * lifesteal);
+                player.hp = Math.min(MAX_HP, player.hp + healAmt);
+                spawnEmber(player.x + player.w / 2, player.y + player.h / 3, '#4ade80');
+              }
             }
           }
         }
+
+        // AOE (Earthshaker Hammer) — damage all enemies in radius
+        if (didHitEnemy && aoeRadius > 0) {
+          const aoeCx = player.facingRight ? player.x + player.w + 15 : player.x - 15;
+          const aoeCy = player.y + player.h / 2;
+          for (const ae of enemies) {
+            if (ae.hitFlash > 0) continue; // already hit this frame
+            const aeDx = (ae.x + ae.w / 2) - aoeCx;
+            const aeDy = (ae.y + ae.h / 2) - aoeCy;
+            if (Math.sqrt(aeDx * aeDx + aeDy * aeDy) < aoeRadius) {
+              if (ae.type === BlockType.BOSS && !ae.weak) continue;
+              if (ae.type === BlockType.MOB_GARGOYLE && ae.dormant) continue;
+              ae.hp -= Math.max(1, Math.floor(ATK_DAMAGE * 0.5));
+              ae.hitFlash = 8;
+              ae.vy = -2;
+              spawnEmber(ae.x + ae.w / 2, ae.y + ae.h / 2, '#c084fc');
+            }
+          }
+          // AOE visual shockwave
+          screenShakeIntensity = 6;
+        }
+
         // Hit-stop + screen shake + haptic on successful hit
         if (didHitEnemy) {
           hitStopTimer = 5; // ~0.08s freeze for impact
           screenShakeTimer = 6;
-          screenShakeIntensity = 4;
+          screenShakeIntensity = Math.max(screenShakeIntensity, 4);
           tryVibrate(20); // short haptic tap
         }
       }
@@ -521,13 +625,50 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         const e = enemies[i];
         if (e.hp <= 0) {
           for (let j = 0; j < 15; j++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#7c3aed');
+
+          // Slime splitting: big slime spawns 2 small slimes
+          if (e.type === BlockType.MOB_SLIME && e.slimeSize === 2) {
+            for (let s = 0; s < 2; s++) {
+              enemies.push({
+                x: e.x + (s === 0 ? -T * 0.5 : T * 0.5), y: e.y,
+                w: T * 1.2, h: T * 1.2,
+                type: BlockType.MOB_SLIME, hp: 2, maxHp: 2,
+                vx: s === 0 ? -2.5 : 2.5, vy: -5,
+                hitFlash: 0, slimeSize: 1, splitDone: true
+              });
+            }
+            for (let j = 0; j < 6; j++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#22c55e');
+          }
+
+          // Item drop
+          const droppedItemId = rollDrop(e.type);
+          if (droppedItemId) {
+            droppedItems.push({
+              x: e.x + e.w / 2 - T / 4,
+              y: e.y,
+              w: T * 0.5, h: T * 0.5,
+              vy: -4,
+              itemId: droppedItemId,
+              life: 600, // 10 seconds to pick up
+              grounded: false
+            });
+          }
+
           enemies.splice(i, 1);
           continue;
         }
         if (e.hitFlash > 0) e.hitFlash--;
 
-        // Gravity for enemies (stationary mage only when knocked back)
-        if (e.type !== BlockType.MOB_STATIONARY || e.vy !== 0) {
+        // Freeze: skip AI update while frozen
+        if (e.frozenTimer > 0) {
+          e.frozenTimer--;
+          continue;
+        }
+
+        // Gravity for enemies (skip for stationary mage when grounded, skip for flying imp)
+        if (e.type === BlockType.MOB_IMP) {
+          // Imp handles its own Y via flying AI — skip gravity
+        } else if (e.type !== BlockType.MOB_STATIONARY || e.vy !== 0) {
           e.vy += 0.5;
           const prevEY = e.y;
           e.y += e.vy;
@@ -646,6 +787,144 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             if (Math.abs(homeDx) > 2) e.x += homeDx > 0 ? 1 : -1;
           }
         }
+
+        // === GARGOYLE AI ===
+        if (e.type === BlockType.MOB_GARGOYLE) {
+          const dx = player.x - e.x;
+          const dy = player.y - e.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (e.dormant) {
+            // Awaken when player is within 4 tiles
+            if (dist < T * 4) {
+              e.awakenTimer++;
+              if (e.awakenTimer > 30) {
+                e.dormant = false;
+                e.defBonus = 0;
+                // Awaken burst particles
+                for (let j = 0; j < 10; j++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#a1a1aa');
+              }
+            }
+          } else {
+            // Active: charge toward player aggressively
+            const chaseSpeed = 2.5;
+            if (Math.abs(dx) > 15) {
+              e.vx = dx > 0 ? chaseSpeed : -chaseSpeed;
+            } else {
+              e.vx = 0;
+            }
+            e.x += e.vx;
+            // Wall collision
+            for (const w of walls) {
+              if (checkCol(e, w)) {
+                if (e.vx > 0) e.x = w.x - e.w;
+                else if (e.vx < 0) e.x = w.x + w.w;
+                e.vx = 0;
+              }
+            }
+          }
+        }
+
+        // === SLIME AI ===
+        if (e.type === BlockType.MOB_SLIME) {
+          // Patrol like MOB_PATROL but slower
+          e.x += e.vx;
+          for (const w of walls) {
+            if (checkCol(e, w)) {
+              if (e.vx > 0) e.x = w.x - e.w;
+              else if (e.vx < 0) e.x = w.x + w.w;
+              e.vx *= -1;
+            }
+          }
+          // Edge detection
+          const sCheckX = e.vx > 0 ? e.x + e.w + 2 : e.x - 2;
+          const sCheckY = e.y + e.h + 4;
+          let sHasFloor = false;
+          for (const w of walls) {
+            if (sCheckX >= w.x && sCheckX <= w.x + w.w && sCheckY >= w.y && sCheckY <= w.y + w.h) {
+              sHasFloor = true; break;
+            }
+          }
+          if (!sHasFloor) {
+            for (const p of platforms) {
+              if (sCheckX >= p.x && sCheckX <= p.x + p.w && sCheckY >= p.y && sCheckY <= p.y + p.h) {
+                sHasFloor = true; break;
+              }
+            }
+          }
+          if (!sHasFloor && e.vy === 0) e.vx *= -1;
+          // Bouncy hop every 60 frames
+          if (frameCount % 60 === 0 && e.vy === 0) e.vy = -6;
+        }
+
+        // === IMP AI ===
+        if (e.type === BlockType.MOB_IMP) {
+          e.flyTimer++;
+          // Erratic flying pattern — sinusoidal with random offsets
+          const flyX = e.homeX + Math.sin(e.flyTimer * 0.03) * T * 3;
+          const flyY = e.homeY + Math.cos(e.flyTimer * 0.05) * T * 1.5;
+          e.x += (flyX - e.x) * 0.05;
+          e.y += (flyY - e.y) * 0.05;
+          e.vy = 0; // override gravity for flying enemy
+
+          // Shoot at player every 90 frames
+          e.shootTimer++;
+          if (e.shootTimer >= 90) {
+            e.shootTimer = 0;
+            const pdx = player.x - e.x;
+            const pdy = player.y - e.y;
+            const pdist = Math.sqrt(pdx * pdx + pdy * pdy) || 1;
+            const speed = 3.5;
+            projectiles.push({
+              x: e.x + e.w / 2 - 6, y: e.y + e.h / 2 - 6,
+              vx: (pdx / pdist) * speed, vy: (pdy / pdist) * speed,
+              w: 10, h: 10, life: 150
+            });
+            for (let j = 0; j < 3; j++) spawnEmber(e.x + e.w / 2, e.y + e.h / 2, '#f97316');
+          }
+        }
+
+        // === SKELETON KNIGHT AI ===
+        if (e.type === BlockType.MOB_SKELETON) {
+          const skDx = player.x + player.w / 2 - (e.x + e.w / 2);
+          const skDist = Math.abs(skDx);
+          e.facingRight = skDx > 0;
+
+          // Attack cooldown cycle
+          e.attackCooldown--;
+          if (e.attackCooldown <= 0) {
+            // Shield down during attack wind-up
+            e.shieldUp = false;
+            e.attackTimer++;
+            if (e.attackTimer >= 30) {
+              // Lunge attack toward player
+              e.vx = e.facingRight ? 6 : -6;
+              e.vy = -3;
+              e.attackTimer = 0;
+              e.attackCooldown = 90;
+              e.shieldUp = true;
+            }
+          } else {
+            e.shieldUp = true;
+            // Slow walk toward player
+            if (skDist > T * 2) {
+              e.vx = skDx > 0 ? 1 : -1;
+            } else {
+              e.vx = 0;
+            }
+          }
+
+          e.x += e.vx;
+          // Friction on lunge
+          if (Math.abs(e.vx) > 1.5) e.vx *= 0.92;
+          // Wall collision
+          for (const w of walls) {
+            if (checkCol(e, w)) {
+              if (e.vx > 0) e.x = w.x - e.w;
+              else if (e.vx < 0) e.x = w.x + w.w;
+              e.vx = 0;
+            }
+          }
+        }
       }
 
       // Projectile updates
@@ -677,11 +956,13 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           h: player.h - shrink
         };
         let hit = false;
+        let hitByEnemy: any = null;
         for (const s of spikes) if (checkCol(hurtBox, s)) hit = true;
-        for (const e of enemies) if (checkCol(hurtBox, e)) hit = true;
+        for (const e of enemies) { if (checkCol(hurtBox, e)) { hit = true; hitByEnemy = e; } }
         for (const p of projectiles) if (checkCol(hurtBox, p)) hit = true;
         if (hit) {
-          player.hp -= Math.max(5, 20 - bonusDef * 3);
+          const dmg = Math.max(5, 20 - bonusDef * 3);
+          player.hp -= dmg;
           player.invulnTimer = 60;
           player.vy = -8;
           player.vx = player.facingRight ? -5 : 5;
@@ -690,6 +971,14 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           screenShakeIntensity = 6;
           tryVibrate([100, 50, 100]); // strong haptic on damage
           for (let i = 0; i < 8; i++) spawnEmber(player.x + player.w / 2, player.y + player.h / 2, '#cc2200');
+
+          // Thornmail: reflect damage back to attacker
+          if (thornsDmg > 0 && hitByEnemy) {
+            const reflected = Math.ceil(dmg * thornsDmg);
+            hitByEnemy.hp -= reflected;
+            hitByEnemy.hitFlash = 8;
+            for (let i = 0; i < 4; i++) spawnEmber(hitByEnemy.x + hitByEnemy.w / 2, hitByEnemy.y + hitByEnemy.h / 2, '#facc15');
+          }
         }
       }
       if (player.invulnTimer > 0) player.invulnTimer--;
@@ -704,6 +993,66 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           tryVibrate(15);
           // Heal HP instantly (30 HP per potion)
           player.hp = Math.min(player.hp + 30, MAX_HP);
+        }
+      }
+
+      // Dropped item physics & pickup
+      for (let i = droppedItems.length - 1; i >= 0; i--) {
+        const di = droppedItems[i];
+        di.life--;
+        if (di.life <= 0) { droppedItems.splice(i, 1); continue; }
+
+        // Gravity
+        if (!di.grounded) {
+          di.vy += 0.5;
+          di.y += di.vy;
+          // Land on walls
+          for (const w of walls) {
+            if (checkCol(di, w) && di.vy > 0) {
+              di.y = w.y - di.h;
+              di.vy = 0;
+              di.grounded = true;
+            }
+          }
+          // Land on platforms
+          for (const p of platforms) {
+            if (checkCol(di, p) && di.vy > 0) {
+              di.y = p.y - di.h;
+              di.vy = 0;
+              di.grounded = true;
+            }
+          }
+        }
+
+        // Pickup
+        if (checkCol(player, di)) {
+          const item = getItem(di.itemId);
+          if (item) {
+            // Add to pickedUpItems
+            const existing = pickedUpItemsRef.current.find(pi => pi.itemId === di.itemId);
+            if (existing) existing.quantity++;
+            else pickedUpItemsRef.current.push({ itemId: di.itemId, quantity: 1 });
+
+            // Particle feedback
+            const rarityColor = item.rarity === 'epic' ? '#c084fc' : item.rarity === 'rare' ? '#38bdf8' : '#a1a1aa';
+            for (let j = 0; j < 8; j++) spawnEmber(di.x + di.w / 2, di.y + di.h / 2, rarityColor);
+            spawnHitSparks(di.x + di.w / 2, di.y + di.h / 2, 6);
+            tryVibrate(15);
+          }
+          droppedItems.splice(i, 1);
+        }
+      }
+
+      // Regen Ring: heal over time
+      if (regenRate > 0) {
+        regenTimer++;
+        if (regenTimer >= 300) { // 5 seconds at 60fps
+          regenTimer = 0;
+          const healAmt = Math.max(1, Math.ceil(MAX_HP * regenRate));
+          if (player.hp < MAX_HP) {
+            player.hp = Math.min(MAX_HP, player.hp + healAmt);
+            spawnEmber(player.x + player.w / 2, player.y + player.h / 3, '#4ade80');
+          }
         }
       }
 
@@ -763,7 +1112,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       for (let r = startRow; r < endRow; r++) {
         for (let c = 0; c < cols; c++) {
           const val = grid[r][c];
-          if (val === BlockType.EMPTY || val === BlockType.MOB_PATROL || val === BlockType.MOB_STATIONARY || val === BlockType.BOSS || val === BlockType.SPAWN || val === BlockType.PLATFORM || val === BlockType.POTION) {
+          if (val === BlockType.EMPTY || val === BlockType.MOB_PATROL || val === BlockType.MOB_STATIONARY || val === BlockType.BOSS || val === BlockType.SPAWN || val === BlockType.PLATFORM || val === BlockType.POTION || val === BlockType.MOB_GARGOYLE || val === BlockType.MOB_SLIME || val === BlockType.MOB_IMP || val === BlockType.MOB_SKELETON) {
             ctx.globalAlpha = 0.15;
             ctx.drawImage(SPRITES.floor, c * T, r * T, T, T);
             ctx.globalAlpha = 1;
@@ -887,6 +1236,211 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           const bf = Math.floor(frameCount / (e.weak ? 30 : 15)) % 2; // faster animation when charging
           ctx.drawImage(ANIM.boss.idle[bf], e.x, e.y, e.w, e.h);
         }
+
+        // === GARGOYLE RENDERING ===
+        if (e.type === BlockType.MOB_GARGOYLE) {
+          if (e.dormant) {
+            // Stone statue look — grey, no glow
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = '#52525b';
+            ctx.filter = e.hitFlash > 0 ? 'brightness(3) saturate(0)' : 'saturate(0) brightness(0.7)';
+            // Draw a stone gargoyle shape
+            ctx.fillStyle = '#71717a';
+            const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, e.y + 4);
+            ctx.lineTo(e.x + e.w - 4, e.y + e.h * 0.4);
+            ctx.lineTo(e.x + e.w - 8, e.y + e.h - 4);
+            ctx.lineTo(e.x + 8, e.y + e.h - 4);
+            ctx.lineTo(e.x + 4, e.y + e.h * 0.4);
+            ctx.closePath();
+            ctx.fill();
+            // Eyes (dim)
+            if (e.awakenTimer > 0) {
+              const intensity = e.awakenTimer / 30;
+              ctx.fillStyle = `rgba(239, 68, 68, ${intensity})`;
+              ctx.fillRect(cx - 12, cy - 8, 6, 4);
+              ctx.fillRect(cx + 6, cy - 8, 6, 4);
+            }
+          } else {
+            // Active gargoyle — red glow
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = '#ef4444';
+            ctx.fillStyle = '#a1a1aa';
+            const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(cx, e.y + 4);
+            ctx.lineTo(e.x + e.w - 4, e.y + e.h * 0.4);
+            ctx.lineTo(e.x + e.w - 8, e.y + e.h - 4);
+            ctx.lineTo(e.x + 8, e.y + e.h - 4);
+            ctx.lineTo(e.x + 4, e.y + e.h * 0.4);
+            ctx.closePath();
+            ctx.fill();
+            // Wings (flapping)
+            const wingFlap = Math.sin(frameCount * 0.15) * 8;
+            ctx.fillStyle = '#78716c';
+            ctx.beginPath();
+            ctx.moveTo(e.x + 8, cy - 4);
+            ctx.lineTo(e.x - 15, cy - 20 + wingFlap);
+            ctx.lineTo(e.x - 5, cy + 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(e.x + e.w - 8, cy - 4);
+            ctx.lineTo(e.x + e.w + 15, cy - 20 - wingFlap);
+            ctx.lineTo(e.x + e.w + 5, cy + 10);
+            ctx.closePath();
+            ctx.fill();
+            // Red eyes
+            ctx.fillStyle = '#ef4444';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#ef4444';
+            ctx.fillRect(cx - 12, cy - 8, 6, 4);
+            ctx.fillRect(cx + 6, cy - 8, 6, 4);
+          }
+        }
+
+        // === SLIME RENDERING ===
+        if (e.type === BlockType.MOB_SLIME) {
+          const bounce = Math.sin(frameCount * 0.1) * 3;
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = '#22c55e';
+          ctx.fillStyle = e.slimeSize === 2 ? '#4ade80' : '#86efac';
+          // Blobby body
+          const sx = e.x, sy = e.y + bounce, sw = e.w, sh = e.h;
+          ctx.beginPath();
+          ctx.ellipse(sx + sw / 2, sy + sh * 0.6, sw / 2, sh * 0.45, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Highlight
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.beginPath();
+          ctx.ellipse(sx + sw * 0.35, sy + sh * 0.4, sw * 0.15, sh * 0.12, -0.3, 0, Math.PI * 2);
+          ctx.fill();
+          // Eyes
+          ctx.fillStyle = '#1a1a2e';
+          ctx.fillRect(sx + sw * 0.3, sy + sh * 0.5, 5, 5);
+          ctx.fillRect(sx + sw * 0.6, sy + sh * 0.5, 5, 5);
+        }
+
+        // === IMP RENDERING ===
+        if (e.type === BlockType.MOB_IMP) {
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#f97316';
+          const wingFlap = Math.sin(frameCount * 0.2) * 6;
+          // Body
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath();
+          ctx.ellipse(e.x + e.w / 2, e.y + e.h * 0.55, e.w * 0.35, e.h * 0.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Wings
+          ctx.fillStyle = '#991b1b';
+          ctx.beginPath();
+          ctx.moveTo(e.x + e.w * 0.2, e.y + e.h * 0.4);
+          ctx.lineTo(e.x - 8, e.y + e.h * 0.2 + wingFlap);
+          ctx.lineTo(e.x + 4, e.y + e.h * 0.6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(e.x + e.w * 0.8, e.y + e.h * 0.4);
+          ctx.lineTo(e.x + e.w + 8, e.y + e.h * 0.2 - wingFlap);
+          ctx.lineTo(e.x + e.w - 4, e.y + e.h * 0.6);
+          ctx.closePath();
+          ctx.fill();
+          // Horns
+          ctx.fillStyle = '#7f1d1d';
+          ctx.beginPath();
+          ctx.moveTo(e.x + e.w * 0.3, e.y + e.h * 0.25);
+          ctx.lineTo(e.x + e.w * 0.2, e.y);
+          ctx.lineTo(e.x + e.w * 0.4, e.y + e.h * 0.3);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(e.x + e.w * 0.7, e.y + e.h * 0.25);
+          ctx.lineTo(e.x + e.w * 0.8, e.y);
+          ctx.lineTo(e.x + e.w * 0.6, e.y + e.h * 0.3);
+          ctx.closePath();
+          ctx.fill();
+          // Eyes
+          ctx.fillStyle = '#fbbf24';
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = '#fbbf24';
+          ctx.fillRect(e.x + e.w * 0.3, e.y + e.h * 0.4, 4, 4);
+          ctx.fillRect(e.x + e.w * 0.6, e.y + e.h * 0.4, 4, 4);
+        }
+
+        // === SKELETON KNIGHT RENDERING ===
+        if (e.type === BlockType.MOB_SKELETON) {
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#a1a1aa';
+          // Flip based on facing
+          if (!e.facingRight) {
+            ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
+            ctx.scale(-1, 1);
+            ctx.translate(-(e.x + e.w / 2), -(e.y + e.h / 2));
+          }
+          // Body (bone colored)
+          ctx.fillStyle = '#d4d4d8';
+          ctx.fillRect(e.x + e.w * 0.25, e.y + e.h * 0.1, e.w * 0.5, e.h * 0.8);
+          // Head (skull)
+          ctx.fillStyle = '#e4e4e7';
+          ctx.beginPath();
+          ctx.arc(e.x + e.w / 2, e.y + e.h * 0.2, e.w * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+          // Eye sockets
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(e.x + e.w * 0.35, e.y + e.h * 0.15, 6, 5);
+          ctx.fillRect(e.x + e.w * 0.55, e.y + e.h * 0.15, 6, 5);
+          // Red eye glow
+          ctx.fillStyle = '#ef4444';
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = '#ef4444';
+          ctx.fillRect(e.x + e.w * 0.36, e.y + e.h * 0.16, 4, 3);
+          ctx.fillRect(e.x + e.w * 0.56, e.y + e.h * 0.16, 4, 3);
+          ctx.shadowBlur = 0;
+          // Shield (left side = front)
+          if (e.shieldUp) {
+            ctx.fillStyle = '#854d0e';
+            ctx.fillRect(e.x + 2, e.y + e.h * 0.2, e.w * 0.2, e.h * 0.5);
+            ctx.strokeStyle = '#a16207';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(e.x + 2, e.y + e.h * 0.2, e.w * 0.2, e.h * 0.5);
+          } else {
+            // Attack wind-up — sword raised
+            ctx.fillStyle = '#a1a1aa';
+            const swordSwing = Math.sin(e.attackTimer * 0.2) * 15;
+            ctx.save();
+            ctx.translate(e.x + e.w * 0.8, e.y + e.h * 0.3);
+            ctx.rotate(-0.5 + swordSwing * 0.02);
+            ctx.fillRect(-3, -25, 6, 30);
+            ctx.restore();
+          }
+          // Sword (right side)
+          ctx.fillStyle = '#71717a';
+          ctx.fillRect(e.x + e.w * 0.75, e.y + e.h * 0.3, 4, e.h * 0.35);
+        }
+
+        // Frozen overlay for any enemy
+        if (e.frozenTimer > 0) {
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.3)';
+          ctx.fillRect(e.x, e.y, e.w, e.h);
+          // Ice crystals
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          for (let ic = 0; ic < 3; ic++) {
+            const ix = e.x + e.w * (0.2 + ic * 0.3);
+            const iy = e.y + e.h * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(ix, iy);
+            ctx.lineTo(ix - 4, iy + 10);
+            ctx.moveTo(ix, iy);
+            ctx.lineTo(ix + 4, iy + 10);
+            ctx.moveTo(ix, iy);
+            ctx.lineTo(ix, iy + 12);
+            ctx.stroke();
+          }
+        }
+
         ctx.restore();
 
         // HP bar
@@ -914,6 +1468,44 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           ctx.shadowBlur = 0;
           ctx.textAlign = 'start';
         }
+      }
+
+      // Dropped items
+      for (const di of droppedItems) {
+        if (di.y + di.h < cameraY - 20 || di.y > cameraY + GAME_H + 20) continue;
+        const item = getItem(di.itemId);
+        if (!item) continue;
+        ctx.save();
+        const floatY = Math.sin(frameCount * 0.08 + di.x) * 3;
+        const rarityColor = item.rarity === 'epic' ? '#c084fc' : item.rarity === 'rare' ? '#38bdf8' : '#a1a1aa';
+        // Glow
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = rarityColor;
+        // Background circle
+        ctx.fillStyle = rarityColor;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.arc(di.x + di.w / 2, di.y + di.h / 2 + floatY, di.w * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // Item icon (small colored square with rarity border)
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(di.x + 2, di.y + 2 + floatY, di.w - 4, di.h - 4);
+        ctx.strokeStyle = rarityColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(di.x + 2, di.y + 2 + floatY, di.w - 4, di.h - 4);
+        // Item type icon
+        ctx.fillStyle = rarityColor;
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        const typeChar = item.type === 'weapon' ? '⚔' : item.type === 'armor' ? '🛡' : item.type === 'boots' ? '👢' : item.type === 'accessory' ? '💍' : '✦';
+        ctx.fillText(typeChar, di.x + di.w / 2, di.y + di.h / 2 + 4 + floatY);
+        ctx.textAlign = 'start';
+        // Blink when about to expire
+        if (di.life < 120 && Math.floor(di.life / 8) % 2 === 0) {
+          ctx.globalAlpha = 0.3;
+        }
+        ctx.restore();
       }
 
       // Projectiles
@@ -982,7 +1574,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
 
         let heroSprite: HTMLImageElement;
         if (player.wallSlideDir !== 0) {
-          heroSprite = ANIM.hero.idle[0];
+          heroSprite = ANIM.hero.wallslide[0];
         } else if (player.attackTimer > 12) {
           heroSprite = ANIM.hero.attack[0];
         } else if (Math.abs(player.vx) > 0) {

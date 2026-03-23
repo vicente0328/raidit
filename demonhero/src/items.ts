@@ -11,6 +11,15 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'HP를 30 회복합니다.',
     healAmount: 30,
   },
+  hp_potion_m: {
+    id: 'hp_potion_m',
+    name: 'Medium Potion',
+    nameKo: '중형 물약',
+    type: 'consumable',
+    rarity: 'common',
+    description: 'HP를 45 회복합니다.',
+    healAmount: 45,
+  },
   hp_potion_l: {
     id: 'hp_potion_l',
     name: 'Large Potion',
@@ -92,6 +101,15 @@ export const ITEMS: Record<string, ItemDef> = {
     description: '이동속도 +1',
     speed: 1,
   },
+  swift_boots: {
+    id: 'swift_boots',
+    name: 'Boots of Swiftness',
+    nameKo: '신속의 장화',
+    type: 'boots',
+    rarity: 'common',
+    description: '이동속도 +1 (10% 증가)',
+    speed: 1,
+  },
   dash_boots: {
     id: 'dash_boots',
     name: 'Dash Boots',
@@ -109,6 +127,62 @@ export const ITEMS: Record<string, ItemDef> = {
     rarity: 'epic',
     description: '이동속도 +3',
     speed: 3,
+  },
+
+  // === Special Weapons ===
+  vampiric_blade: {
+    id: 'vampiric_blade',
+    name: 'Vampiric Blade',
+    nameKo: '흡혈의 검',
+    type: 'weapon',
+    rarity: 'rare',
+    description: '공격력 +2, 피해의 20%만큼 HP 회복',
+    atk: 2,
+    lifesteal: 0.2,
+  },
+  frostbow: {
+    id: 'frostbow',
+    name: 'Frostbow',
+    nameKo: '빙결의 활',
+    type: 'weapon',
+    rarity: 'epic',
+    description: '공격력 +3, 30% 확률로 적 2초 빙결',
+    atk: 3,
+    freezeChance: 0.3,
+  },
+  earthshaker_hammer: {
+    id: 'earthshaker_hammer',
+    name: 'Earthshaker Hammer',
+    nameKo: '대지의 망치',
+    type: 'weapon',
+    rarity: 'epic',
+    description: '공격력 +3, 주변 적에게 광역 피해',
+    atk: 3,
+    aoeRadius: 120,
+  },
+
+  // === Special Armor ===
+  thornmail: {
+    id: 'thornmail',
+    name: 'Thornmail',
+    nameKo: '가시 갑옷',
+    type: 'armor',
+    rarity: 'rare',
+    description: '방어력 +2, 최대HP +15, 피격 시 피해 30% 반사',
+    def: 2,
+    maxHp: 15,
+    thornsDmg: 0.3,
+  },
+
+  // === Accessories ===
+  regen_ring: {
+    id: 'regen_ring',
+    name: 'Ring of Regeneration',
+    nameKo: '재생의 반지',
+    type: 'accessory',
+    rarity: 'rare',
+    description: '5초마다 최대 HP의 1%를 회복합니다',
+    regenRate: 0.01,
   },
 };
 
@@ -141,10 +215,15 @@ export const RARITY_COLORS: Record<string, string> = {
   epic: '#c084fc',
 };
 
+// Medium potion for drop table
+// (hp_potion_m is a mid-tier consumable between small and large)
+
+
 export const SLOT_NAMES_KO: Record<string, string> = {
   weapon: '무기',
   armor: '갑옷',
   boots: '장화',
+  accessory: '장신구',
 };
 
 export const ITEM_TYPE_EMOJI: Record<string, string> = {
@@ -152,4 +231,5 @@ export const ITEM_TYPE_EMOJI: Record<string, string> = {
   weapon: '⚔️',
   armor: '🛡️',
   boots: '👢',
+  accessory: '💍',
 };
