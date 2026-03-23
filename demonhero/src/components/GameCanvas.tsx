@@ -1041,6 +1041,16 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             if (existing) existing.quantity++;
             else pickedUpItemsRef.current.push({ itemId: di.itemId, quantity: 1 });
 
+            // Immediately reflect in in-game inventory (bag UI)
+            if (item.type === 'consumable') {
+              setInGameInventory(prev => {
+                const copy = prev.map(i => ({ ...i }));
+                const ex = copy.find(i => i.itemId === di.itemId);
+                if (ex) { ex.quantity++; return copy; }
+                return [...copy, { itemId: di.itemId, quantity: 1 }];
+              });
+            }
+
             // Particle feedback
             const rarityColor = item.rarity === 'epic' ? '#c084fc' : item.rarity === 'rare' ? '#38bdf8' : '#a1a1aa';
             for (let j = 0; j < 8; j++) spawnEmber(di.x + di.w / 2, di.y + di.h / 2, rarityColor);
