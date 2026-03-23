@@ -320,9 +320,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       }
 
       // Jump buffer: set on fresh press, decay over time
-      if (keys.ArrowUp && !prevArrowUp) jumpBufferTimer = JUMP_BUFFER_FRAMES;
+      const freshJumpPress = keys.ArrowUp && !prevArrowUp;
+      if (freshJumpPress) jumpBufferTimer = JUMP_BUFFER_FRAMES;
       if (jumpBufferTimer > 0) jumpBufferTimer--;
-      prevArrowUp = keys.ArrowUp;
 
       // Jump: works with coyote time OR jump buffer
       const canJump = player.isGrounded || coyoteTimer > 0;
@@ -401,7 +401,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       }
 
       // Wall jump: press jump while wall sliding
-      if (player.wallSlideDir !== 0 && keys.ArrowUp && !prevArrowUp) {
+      if (player.wallSlideDir !== 0 && freshJumpPress) {
         player.vy = WALL_JUMP_VY;
         player.vx = -player.wallSlideDir * WALL_JUMP_VX; // kick away from wall
         player.facingRight = player.wallSlideDir < 0; // face away from wall
@@ -417,6 +417,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         }
         tryVibrate(10);
       }
+
+      // Update prevArrowUp AFTER wall jump check so freshJumpPress works correctly
+      prevArrowUp = keys.ArrowUp;
 
       // Fall off bottom = damage + respawn at last ground
       if (player.y > worldH + 50) {
