@@ -41,8 +41,12 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
   );
   const keysRef = useRef({ ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false });
   const equipmentRef = useRef(stats.equipment);
-  // Only update ref, don't trigger game loop restart
   useEffect(() => { equipmentRef.current = stats.equipment; }, [stats.equipment]);
+  // Store callbacks in refs so useEffect doesn't restart when App re-renders
+  const onWinRef = useRef(onWin);
+  useEffect(() => { onWinRef.current = onWin; }, [onWin]);
+  const onLoseRef = useRef(onLose);
+  useEffect(() => { onLoseRef.current = onLose; }, [onLose]);
   const [isMobile, setIsMobile] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: GAME_W, h: GAME_H });
 
@@ -155,6 +159,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     let droppedItems: { x: number; y: number; w: number; h: number; vy: number; itemId: string; life: number; grounded: boolean }[] = [];
     let door: { x: number; y: number; w: number; h: number } | null = null;
     let regenTimer = 0;
+    let itemMessages: { text: string; color: string; life: number; maxLife: number }[] = [];
 
     const loadRoom = (idx: number) => {
       walls = [];
@@ -1041,6 +1046,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
             for (let j = 0; j < 8; j++) spawnEmber(di.x + di.w / 2, di.y + di.h / 2, rarityColor);
             spawnHitSparks(di.x + di.w / 2, di.y + di.h / 2, 6);
             tryVibrate(15);
+            // Show item pickup message
+            itemMessages.push({ text: `${item.nameKo} 획득!`, color: rarityColor, life: 120, maxLife: 120 });
           }
           droppedItems.splice(i, 1);
         }
@@ -1067,12 +1074,12 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
           transitionTimer = 40;
           cameraY = worldH - GAME_H; // start camera at bottom
         } else {
-          onWin(pickedUpItemsRef.current);
+          onWinRef.current(pickedUpItemsRef.current);
           return;
         }
       }
 
-      if (player.hp <= 0) { onLose(pickedUpItemsRef.current); return; }
+      if (player.hp <= 0) { onLoseRef.current(pickedUpItemsRef.current); return; }
 
       } // end of !frozen physics block
 
@@ -1604,6 +1611,28 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
         ctx.fillRect(barX - 2, doorDotY - 2, 10, 4);
       }
 
+      // Item pickup messages (screen-space, stacked from bottom)
+      for (let i = itemMessages.length - 1; i >= 0; i--) {
+        const msg = itemMessages[i];
+        msg.life--;
+        if (msg.life <= 0) { itemMessages.splice(i, 1); continue; }
+        const alpha = Math.min(1, msg.life / 30); // fade out in last 30 frames
+        const yOffset = (itemMessages.length - 1 - i) * 22;
+        const msgY = GAME_H - 60 - yOffset;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = 'bold 11px "Cinzel", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(msg.text, GAME_W / 2, msgY);
+        ctx.fillStyle = msg.color;
+        ctx.fillText(msg.text, GAME_W / 2, msgY);
+        ctx.textAlign = 'start';
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
       // Floor transition overlay
       if (transitionTimer > 0) {
         transitionTimer--;
@@ -1623,7 +1652,7 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       cancelAnimationFrame(animationFrameId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, onWin, onLose]);
+  }, [level]);
 
   // Sync pause state
   useEffect(() => {
