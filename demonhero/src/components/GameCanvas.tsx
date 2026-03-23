@@ -40,6 +40,9 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
     stats.inventory.filter(i => getItem(i.itemId)?.type === 'consumable').map(i => ({ ...i }))
   );
   const keysRef = useRef({ ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false });
+  const equipmentRef = useRef(stats.equipment);
+  // Only update ref, don't trigger game loop restart
+  useEffect(() => { equipmentRef.current = stats.equipment; }, [stats.equipment]);
   const [isMobile, setIsMobile] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ w: GAME_W, h: GAME_H });
 
@@ -1759,7 +1762,8 @@ export function GameCanvas({ level, stats, onWin, onLose, onQuit, onSaveInventor
       window.removeEventListener('keyup', handleKeyUp);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [level, onWin, onLose, stats.equipment]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, onWin, onLose]);
 
   // Sync pause state
   useEffect(() => {
